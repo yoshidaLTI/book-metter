@@ -6,35 +6,58 @@ router = APIRouter(
     prefix="/api/books",
     tags=["books"]
 )
+from ..dependencies import get_current_user_id
+# --- 本の一覧取得 ---
+
+@router.get("/user/{user_id}", response_model=List[schemas.Book])
+def read_user_books(user_id: int, db: Session = Depends(database.get_db)):
+    """
+    ① 本の一覧取得:
+    特定のユーザーが登録している本をすべて取得します。
+    各本には、重複を除いた既読ページ数（total_read_pages）が自動計算されて付与されます。
+    """
+    return crud.get_user_books(db, user_id=user_id)
+
+
+# --- 本の新規登録 ---
+
+@router.post("/", response_model=schemas.Book)
+def create_book(book: schemas.BookCreate, db: Session = Depends(database.get_db),user_id: int = Depends(get_current_user_id)):
+    """
+    ② 本の新規登録:
+    タイトル、総ページ数、目標日を設定して新しい本をリストに加えます。
+    ※事前にユーザー登録（users router側）が完了している必要があります。
+    """
+    book.user_id = user_id # クッキーから判明した本人IDをセット
+    return crud.create_user_book(db, book)
+
+
+# --- 進捗の記録 ---
 
 @router.post("/{book_id}/progress", response_model=schemas.Progress)
 def create_progress(book_id: int, progress: schemas.ProgressCreate, db: Session = Depends(database.get_db)):
-    """② 進捗入力: 特定の本に対して、読んだページ数とメモを記録します"""
+    """
+    ③ 進捗の記録:
+    読んだ範囲（開始〜終了ページ）を記録します。
+    バリデーションにより、不正な数値（マイナスや本の最大ページ超え）はフロント側で弾かれますが、
+    バックエンドでもデータの整合性をチェックします。
+    """
     db_book = db.query(models.Book).filter(models.Book.id == book_id).first()
     if db_book is None:
-        raise HTTPException(status_code=404, detail="Book not found")
+        raise HTTPException(status_code=404, detail="記録対象の本が見つかりません。")
     return crud.create_book_progress(db=db, progress=progress, book_id=book_id)
 
-@router.post("/", response_model=schemas.Book)
-def create_book(book: schemas.BookCreate, db: Session = Depends(database.get_db)):
-    """③ Book登録: ユーザーIDを指定して新しい本を登録します"""
-    # ユーザーが存在するかチェック
-    db_user = crud.get_user(db, user_id=book.user_id)
-    if db_user is None:
-        raise HTTPException(status_code=404, detail="User not found")
-    return crud.create_user_book(db=db, book=book)
+
+# --- 本の削除 ---
 
 @router.delete("/{book_id}")
 def delete_book(book_id: int, db: Session = Depends(database.get_db)):
-    """⑤ Book削除: IDを指定して本を削除します"""
+    """
+    ④ 本の削除:
+    本をリストから削除します。
+    【注意】この操作を行うと、その本に紐づくすべての進捗ログも同時に削除されます。
+    """
     db_book = crud.delete_book(db, book_id=book_id)
     if db_book is None:
-        raise HTTPException(status_code=404, detail="Book not found")
-    return {"message": f"Book '{db_book.title}' deleted successfully"}
-
-# --- ここに「特定のユーザーの本一覧」を取得するエンドポイントを追加 ---
-# usersルーターに入れても良いですが、管理上こちらに書く手法もあります
-@router.get("/user/{user_id}", response_model=List[schemas.Book])
-def read_user_books(user_id: int, db: Session = Depends(database.get_db)):
-    """④ Book取得: 特定のユーザーが持っている本の一覧を取得します"""
-    return crud.get_user_books(db, user_id=user_id)
+        raise HTTPException(status_code=404, detail="削除対象の本が見つかりません。")
+    return {"message": f"本 '{db_book.title}' を削除しました。"}

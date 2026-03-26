@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>ログイン - Reading Log</title>
+    <link rel="stylesheet" href="../src/css/style.css">
+    <style>
+        .auth-container { max-width: 400px; margin: 100px auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background: #fff; }
+        .auth-form input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        .auth-btn { width: 100%; padding: 12px; background: #4a90e2; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        .toggle-link { text-align: center; margin-top: 15px; font-size: 14px; color: #666; cursor: pointer; text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="auth-container">
+        <h2 id="auth-title">ログイン</h2>
+        <div class="auth-form">
+            <input type="text" id="username" placeholder="ユーザー名">
+            <input type="password" id="password" placeholder="パスワード">
+            <button class="auth-btn" id="submit-btn" onclick="handleAuth()">ログイン</button>
+            <div class="toggle-link" id="toggle-auth" onclick="toggleAuthMode()">新規登録はこちら</div>
+        </div>
+    </div>
+    <script src="../src/js/api.js"></script>
+    <script>
+        let isLoginMode = true;
+
+        function toggleAuthMode() {
+            isLoginMode = !isLoginMode;
+            document.getElementById('auth-title').innerText = isLoginMode ? 'ログイン' : '新規登録';
+            document.getElementById('submit-btn').innerText = isLoginMode ? 'ログイン' : '登録する';
+            document.getElementById('toggle-auth').innerText = isLoginMode ? '新規登録はこちら' : 'ログインに戻る';
+        }
+
+        async function handleAuth() {
+            const user = document.getElementById('username').value;
+            const pass = document.getElementById('password').value;
+            if (!user || !pass) return alert("入力してください");
+
+            const endpoint = isLoginMode ? '/api/auth/login' : '/api/auth/signup';
+            
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: user, password: pass })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || "認証に失敗しました");
+                }
+
+                alert(isLoginMode ? "ログインしました！" : "登録しました！ログインしてください。");
+                if (isLoginMode) {
+                    window.location.href = "/public/index.html"; // メイン画面へ
+                } else {
+                    toggleAuthMode(); // 登録後はログイン画面に切り替え
+                }
+            } catch (err) {
+                alert(err.message);
+            }
+        }
+    </script>
+</body>
+</html>

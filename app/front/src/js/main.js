@@ -1,19 +1,101 @@
 // app/front/src/js/main.js
+// 現在のログインユーザー情報を保持する変数
+let currentUserId = null;
+
+/**
+ * 認証チェック
+ */
+async function checkAuthAndLoad() {
+    try {
+        const user = await getCurrentUser();
+        currentUserId = user.id;
+        // 成功した時だけ本を読み込む（これが正解のフロー）
+        await fetchBooks(); 
+    } catch (error) {
+        console.warn("未認証のためログイン画面へ遷移します:", error);
+        
+        // 【テスト用】もしこれが表示されれば、リダイレクト処理までは到達しています
+        // alert("ログインが必要です。ログイン画面へ移動します。");
+
+        // 実際のパスが /public/login.html か /login.html かをブラウザで確認してください
+        window.location.href = "/public/login.html";
+    }
+}
+
+/**
+ * ユーザープロフィールの読み込みと表示
+ */
+document.addEventListener('DOMContentLoaded', async () => {
+    await loadUserProfile();
+});
+// ログイン中のユーザー情報を取得して画面に反映する関数
+async function loadUserProfile() {
+    try {
+        // Cookieを自動で送信して、自分の情報を取得する
+        const response = await fetch('/api/auth/me');
+        
+        if (!response.ok) {
+            // セッションが切れているか、未ログインならログイン画面へ弾く（門番の役割）
+            window.location.href = "/login.html";
+            return;
+        }
+
+        const user = await response.json();
+        
+        // 取得した情報をHTMLにセットする！
+        document.getElementById('user-id').innerText = user.id;
+        document.getElementById('user-name').innerText = user.username;
+        
+    } catch (error) {
+        console.error("ユーザー情報の取得に失敗しました", error);
+    }
+}
+
+
+/**
+ * ログアウト
+ */
+async function logout() {
+    if (!confirm("ログアウトしますか？")) return;
+
+    try {
+        await postLogout();
+        // 成功したらログイン画面へ飛ばす
+        // ※ 先ほど成功した正しいパス（/public/login.html か /login.html）に合わせてください
+        window.location.href = "/public/login.html"; 
+    } catch (error) {
+        alert(error.message);
+    }
+}
+
+
+
+/**
+ * 本の一覧取得と表示
+ */
 async function fetchBooks() {
-    const userId = document.getElementById('user-id').innerText;
     const bookListDiv = document.getElementById('book-list');
     
+    // 画面上の隠し要素(innerText)から取るのではなく、変数から使うのが安全
+    if (!currentUserId) return;
+
     try {
-        const books = await getBooks(userId);
+        const books = await getBooks(currentUserId);
+        
+        // データが空の場合のケア
+        if (books.length === 0) {
+            bookListDiv.innerHTML = "<p style='text-align:center; color:#666;'>登録されている本がありません。</p>";
+            return;
+        }
+
         bookListDiv.innerHTML = books.map(book => {
-            // --- 飛び飛びのバーを作成するロジック ---
+            // --- プログレスバーの生成 ---
             let progressBarHtml = `
                 <div class="progress-container" style="background: #eee; height: 12px; border-radius: 6px; margin: 15px 0; position: relative; overflow: hidden; border: 1px solid #ddd;">
             `;
 
             if (book.progress_logs && book.progress_logs.length > 0) {
                 book.progress_logs.forEach(log => {
-                    // 全ページに対する「開始位置」と「幅」を計算
                     const left = ((log.start_page - 1) / book.total_pages) * 100;
                     const width = ((log.end_page - log.start_page + 1) / book.total_pages) * 100;
                     
@@ -31,35 +113,37 @@ async function fetchBooks() {
                 });
             }
             progressBarHtml += `</div>`;
-            // ------------------------------------
 
             return `
-                <div class="book-card" style="border: 1px solid #ccc; margin: 20px 0; padding: 20px; border-radius: 10px; background: white; position: relative;">
-                    <button onclick="requestDeleteBook(${book.id}, '${book.title}')" style="position: absolute; top: 10px; right: 10px; background:#ff4757; color:white; border:none; border-radius:4px; padding: 5px 10px; cursor:pointer;">削除</button>
+                <div class="book-card" style="border: 1px solid #ccc; margin: 20px 0; padding: 20px; border-radius: 10px; background: white; position: relative; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+                    <button onclick="requestDeleteBook(${book.id}, '${book.title}')" style="position: absolute; top: 10px; right: 10px; background:#ff4757; color:white; border:none; border-radius:4px; padding: 5px 10px; cursor:pointer; font-size:12px;">削除</button>
                     
                     <h3>📖 ${book.title}</h3>
-                    
-                    <p>進捗: <strong>${book.total_read_pages}</strong> / ${book.total_pages} ページ</p>
+                    <p>進捗: <strong>${book.total_read_pages}</strong> / ${book.total_pages} ページ (${Math.round((book.total_read_pages/book.total_pages)*100)}%)</p>
                     
                     ${progressBarHtml}
 
                     <div style="background: #f9f9f9; padding: 15px; border-radius: 5px; margin-top: 10px; border: 1px dashed #4a90e2;">
-                        <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #4a90e2;">この本の進捗を記録する</h4>
-                        <input type="date" id="date-${book.id}" value="${new Date().toISOString().split('T')[0]}" style="width: 130px;">
-                        <input type="number" id="start-${book.id}" placeholder="開始" style="width: 60px;"> 〜 
-                        <input type="number" id="end-${book.id}" placeholder="終了" style="width: 60px;">
-                        <input type="text" id="memo-${book.id}" placeholder="一言メモ" style="width: 150px;">
-                        <button onclick="submitProgress(${book.id})" style="background: #4a90e2; color: white; border: none; padding: 5px 15px; border-radius: 4px; cursor: pointer;">記録</button>
+                        <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #4a90e2;">進捗を記録する</h4>
+                        <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                            <input type="date" id="date-${book.id}" value="${new Date().toISOString().split('T')[0]}" style="padding:5px;">
+                            <input type="number" id="start-${book.id}" placeholder="開始" style="width: 60px; padding:5px;"> 〜 
+                            <input type="number" id="end-${book.id}" placeholder="終了" style="width: 60px; padding:5px;">
+                            <input type="text" id="memo-${book.id}" placeholder="一言メモ" style="flex-grow: 1; min-width: 100px; padding:5px;">
+                            <button onclick="submitProgress(${book.id})" style="background: #4a90e2; color: white; border: none; padding: 5px 15px; border-radius: 4px; cursor: pointer;">記録</button>
+                        </div>
                     </div>
                 </div>
             `;
         }).join('');
         
     } catch (error) {
-        console.error(error);
-        bookListDiv.innerHTML = "<p>読み込みエラーが発生しました</p>";
+        console.error("Fetch books error:", error);
+        bookListDiv.innerHTML = "<p>データの取得に失敗しました。ログインし直してください。</p>";
     }
 }
+
+
 async function submitProgress(bookId) {
     // 入力値の取得
     const dateInput = document.getElementById(`date-${bookId}`).value;
@@ -97,9 +181,9 @@ async function submitProgress(bookId) {
     }
 
     // D. 本の最大ページ数を超えていないかチェック
-    // DOMから現在の本の最大ページ数を取得（少し工夫が必要です）
+    // DOMから現在の本の最大ページ数を取得
     try {
-        const books = await getBooks(document.getElementById('user-id').innerText);
+        const books = await getBooks(currentUserId);
         const currentBook = books.find(b => b.id === bookId);
         
         if (currentBook && endPage > currentBook.total_pages) {
@@ -128,7 +212,7 @@ async function submitProgress(bookId) {
 }
 
 async function submitNewBook() {
-    const userId = parseInt(document.getElementById('user-id').innerText);
+    const userId = currentUserId;
     const data = {
         title: document.getElementById('book-title').value,
         total_pages: parseInt(document.getElementById('book-pages').value),
@@ -170,7 +254,7 @@ async function requestDeleteBook(bookId, title) {
 }
 
 
-
-
 // ページ読み込み時に自動実行
-window.onload = fetchBooks;
+window.onload = async () => {
+    await checkAuthAndLoad();// まず認証チェック
+};

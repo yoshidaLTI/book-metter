@@ -6,11 +6,14 @@
     <link rel="stylesheet" href="/src/css/style.css">
 </head>
 <body>
-    <h1>📚 私の読書ログ</h1>
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 20px;">
+        <h1 style="margin: 0;">book-metter</h1>
+        <button onclick="logout()" style="background-color: #ff4757; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; font-weight: bold;">ログアウト</button>
+    </div>
     
     <div id="user-info">
-        <p>ユーザーID: <span id="user-id">1</span></p>
-        <button onclick="fetchBooks()">本の一覧を更新</button>
+            <p>ようこそ、<span id="user-name" style="font-weight: bold; color: #4a90e2;">読込中...</span> さん！ (ID: <span id="user-id"></span>)</p>
+            <button onclick="fetchBooks()">本の一覧を更新</button>
     </div>
 
     <div id="add-book-form" style="border: 1px solid #2ecc71; padding: 15px; margin: 10px; border-radius: 8px; background: #eafff2;">

@@ -2,6 +2,26 @@
 
 const API_BASE = "/api"; // Nginx経由なのでドメイン不要
 
+/**
+ * 現在のログインユーザーを取得する
+ * クッキーが無効・または無い場合は 401 エラーを期待します
+ */
+async function getCurrentUser() {
+    const response = await fetch('/api/auth/me'); // あとでバックエンドに作る
+    if (!response.ok) {
+        throw new Error("Unauthorized");
+    }
+    return response.json();
+}
+/**
+ * ログアウトする
+ */
+async function postLogout() {
+    const response = await fetch('/api/auth/logout', { method: 'POST' });
+    if (!response.ok) throw new Error("ログアウトに失敗しました");
+    return await response.json();
+}
+
 async function getBooks(userId) {
     const response = await fetch(`${API_BASE}/books/user/${userId}`);
     if (!response.ok) throw new Error("本の取得に失敗しました");
