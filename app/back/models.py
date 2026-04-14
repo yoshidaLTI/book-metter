@@ -33,9 +33,6 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     last_login = Column(DateTime(timezone=True))
     email = Column(String)
-    rank = Column(Integer, default=0)
-    # user.books で「このユーザーが登録している本のリスト」にアクセスできるようにします。
-    # books = relationship("Book", back_populates="owner")
 
 #=========================================#
 # 本（Book）のテーブル設計図
@@ -46,17 +43,19 @@ class Book(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, index=True)
     total_pages = Column(Integer)
-    preamble = Column(Integer)
-    target_date = Column(String, nullable=True)
+    # preamble = Column(Integer)
     
-    # ▼ API (国立国会図書館) から取得する情報 ▼
+    # ▼ API (google books) から取得する情報 ▼
     author = Column(String, nullable=True)         # 著者 (dc:creator)
     publisher = Column(String, nullable=True)      # 出版社 (dc:publisher) 
-    published_year = Column(String, nullable=True) # 出版年 (dc:date)
-    isbn = Column(String, nullable=True)           # ISBN (dc:identifier) 
+    published_date = Column(String, nullable=True) # 出版日 (dc:date)
     description = Column(Text, nullable=True)      # 概要/説明 (description) 
-    ndl_link = Column(String, nullable=True)       # 国会図書館のリンク (link)
-    cover_url = Column(String, nullable=True)      # 書影画像URL (ISBNをもとにフロント側やAPI側で生成)
+    self_link = Column(String, nullable=True)      # Google Booksのリンク (link)
+    api_id = Column(String)                        # jsonのkindの中のid
+    api_etag = Column(String)                      # jsonのkindの中のetag
+    description = Column(Text, nullable=True)      # 本の説明文書
+    small_cover_url = Column(String, nullable=True)# 小さい書影画像のURL
+    cover_url = Column(String, nullable=True)      # 書影画像のURL
 
     # # ▼ アプリ独自の管理情報 ▼
     # status = Column(String, default="未読")         # ステータス（未読, 読書中, 読了）
