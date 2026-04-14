@@ -78,7 +78,9 @@ class Progress(Base):
     id = Column(Integer, primary_key=True, index=True)
     group_id = Column(Integer, ForeignKey("groups.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
-    progress = Column(Integer)
+    progress_memo = Column(String)
+    start_page = Column(Integer)
+    end_page = Column(Integer)
 
     group = relationship("Group", back_populates="progresses")
     user = relationship("User", back_populates="progresses")
