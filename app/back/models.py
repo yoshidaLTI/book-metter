@@ -72,17 +72,34 @@ class Book(Base):
 #=========================================#
 # 読書進捗ログ（ProgressLog）のテーブル設計図
 #=========================================#
-class ProgressLog(Base):
-    __tablename__ = "progress_logs"
-    # 「どの本の進捗か？」を示すために、booksテーブルのidを外部キーとして保存します
+class Progress(Base):
+    __tablename__ = "progresses"
+
     id = Column(Integer, primary_key=True, index=True)
-    date = Column(String)
+    group_id = Column(Integer, ForeignKey("groups.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+    progress = Column(Integer)
+
+    group = relationship("Group", back_populates="progresses")
+    user = relationship("User", back_populates="progresses")
+
+class Group(Base):
+    __tablename__ = "groups"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True)
     book_id = Column(Integer, ForeignKey("books.id"))
-    
-    start_page = Column(Integer)  
-    end_page = Column(Integer)    
-    memo = Column(Text, nullable=True) # メモも長くなる可能性があるのでText型がおすすめ
-    
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    #progress.book で「この進捗が属する本（Book）」にアクセスできるようにします。
-    book = relationship("Book", back_populates="progress_logs")
+
+    target_book = relationship("Book", back_populates="groups")
+    members = relationship("GroupMember", back_populates="group")
+    progresses = relationship("Progress", back_populates="group")
+
+class GroupMember(Base):
+    __tablename__ = "group_members"
+
+    id = Column(Integer, primary_key=True, index=True)
+    group_id = Column(Integer, ForeignKey("groups.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+
+    group = relationship("Group", back_populates="members")
+    user = relationship("User", back_populates="joined_groups")
