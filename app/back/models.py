@@ -34,6 +34,8 @@ class User(Base):
     last_login = Column(DateTime(timezone=True))
     email = Column(String)
 
+    joined_groups = relationship("Group_member", back_popuplates="user")
+
 #=========================================#
 # 本（Book）のテーブル設計図
 #=========================================#
@@ -71,7 +73,7 @@ class Book(Base):
     # owner = relationship("User", back_populates="books")
     # # book.progress_logs で「この本の進捗ログのリスト」にアクセスできるようにします。
     # progress_logs = relationship("ProgressLog", back_populates="book")
-
+    groups = relationship("Group", back_populates="target_book")
 #=========================================#
 # 読書進捗ログ（ProgressLog）のテーブル設計図
 #=========================================#
@@ -86,7 +88,7 @@ class Progress(Base):
     end_page = Column(Integer)
 
     group = relationship("Group", back_populates="progresses")
-    user = relationship("User", back_populates="progresses")
+    #user = relationship("User", back_populates="progresses")
 
 class Group(Base):
     __tablename__ = "groups"
@@ -107,3 +109,24 @@ class GroupMember(Base):
 
     group = relationship("Group", back_populates="members")
     user = relationship("User", back_populates="joined_groups")
+
+class Memo(Base):
+    __tablename__ = "memos"
+    id = Column(Integer, primary_key=True, index=True)
+    group_id = Column(Integer, ForeignKey("groups.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+    location = Column(Integer)
+    created = Column(DateTime(timezone=True), server_default=func.now())
+    text = Column(Text)
+
+# レジュメテーブル．輪講資料に関するテーブル．
+# group_idとuser_idは外部キーで管理する．locationはページ数や章番号などの位置情報を格納する．
+# URLはクラウド内の輪講資料の保存場所を示す．
+class Resume(Base):
+    __tablename__ = "resumes"
+    id = Column(Integer, primary_key=True, index=True)
+    group_id = Column(Integer, ForeignKey("groups.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+    location = Column(Integer)
+    created = Column(DateTime(timezone=True), server_default=func.now())
+    url = Column(String)
