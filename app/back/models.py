@@ -78,8 +78,8 @@ class Progress(Base):
     id = Column(Integer, primary_key=True, index=True)
     group_id = Column(Integer, ForeignKey("groups.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
-    progress_memo = Column(String, nullable=True)
-    start_page = Column(Integer)
+    progress_memo = Column(String, nullable=True) #進捗追加の際に書くメモ
+    start_page = Column(Integer) 
     end_page = Column(Integer)
 
     group = relationship("Group", back_populates="progresses")
@@ -99,7 +99,6 @@ class Group(Base):
 class GroupMember(Base):
     __tablename__ = "group_members"
 
-    id = Column(Integer, primary_key=True, index=True)
     group_id = Column(Integer, ForeignKey("groups.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
 
