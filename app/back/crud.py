@@ -105,3 +105,66 @@ def calculate_total_progress(logs):
     # 3. 各区間のページ数を算出 (終了 - 開始 + 1) して合計
     total = sum(end - start + 1 for start, end in merged)
     return total
+
+# =================================================================
+# 4. グループ操作 (Group Operations)
+# =================================================================
+
+def get_group_users(db: Session, group_id: int):
+    # 特定のグループに所属するユーザーを取得します。
+    # グループ取得
+    group = db.query(models.Group).filter(models.Group.id == group_id).first()
+    if not group:
+        return None, None
+    # グループメンバーからユーザIDを抽出
+    user_ids = [member.user_id for member in group.members]
+    return group.members, user_ids
+
+
+def join_group(db: Session, group_id: int, user_id: int, password: str = None):
+    # グループにユーザーを参加させる
+    group = db.query(models.Group).filter(models.Group.id == group_id).first()
+    if not group:
+        return False, "グループが見つかりません"
+    
+    # 参加前の重複チェック
+    existing_member = db.query(models.GroupMember).filter_by(group_id=group_id, user_id=user_id).first()
+    if existing_member:
+        return False, "すでに参加しています"
+    
+    # パスワードが必要な場合の検証
+    if group.is_lock and password != group.password:
+        return False, "パスワードが間違っています"
+    
+    # グループメンバーシップを作成
+    new_member = models.GroupMember(group_id=group_id, user_id=user_id)
+    db.add(new_member)
+    db.commit()
+    return True, "グループに参加しました"
+
+def leave_group(db: Session, group_id: int, user_id: int):
+    # グループからユーザーを退会させる
+    group = db.query(models.Group).filter(models.Group.id == group_id).first()
+    if not group:
+        return False, "グループが見つかりません"
+    
+    # 退会前の存在チェック
+    member = db.query(models.GroupMember).filter_by(group_id=group_id, user_id=user_id).first()
+    if not member:
+        return False, "グループに参加していません"
+    
+    # オーナーが退会しようとした場合の処理
+    if group.owner_id == user_id:
+        return False, "オーナーは退会できません。グループを削除してください。"
+    
+    # グループメンバーシップを削除
+    db.delete(member)
+    db.commit()
+    return True, "グループから退会しました"
+
+def get_user_groups(db: Session, user_id: int):
+    # ユーザーが所属しているグループを取得します。
+    memberships = db.query(models.GroupMember).filter_by(user_id=user_id).all()
+    groups = [membership.group.name for membership in memberships]
+    ids = [membership.group_id for membership in memberships]
+    return groups, ids
