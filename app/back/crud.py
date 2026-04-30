@@ -2,26 +2,19 @@ from sqlalchemy.orm import Session
 from . import models, schemas
 
 # =================================================================
-# 1. ユーザー操作 (User Operations)
+# 1. ユーザー操作
 # =================================================================
 
 def get_user(db: Session, user_id: int):
-    """IDでユーザーを検索します。主にAPIの認証や存在確認で使用します。"""
     return db.query(models.User).filter(models.User.id == user_id).first()
 
 def get_user_by_username(db: Session, username: str):
-    """ユーザー名で検索します。ログイン時の重複チェックなどに利用します。"""
     return db.query(models.User).filter(models.User.username == username).first()
 
 def create_user(db: Session, user: schemas.UserCreate, hashed_password: str):
-    """
-    新規ユーザーを作成します。
-    auth.py で安全にハッシュ化（暗号化）されたパスワードを受け取って保存します。
-    """
-    # ユーザー名と、暗号化済みのパスワードをDBにセットする
     db_user = models.User(
-        username=user.username, 
-        password_hash=hashed_password  
+        username=user.username,
+        password_hash=hashed_password
     )
     db.add(db_user)
     db.commit()
@@ -29,31 +22,21 @@ def create_user(db: Session, user: schemas.UserCreate, hashed_password: str):
     return db_user
 
 # =================================================================
-# 2. 本の操作 (Book Operations)
+# 2. 本の操作
 # =================================================================
 
-def get_user_books(db: Session, user_id: int):
-    """特定のユーザーが所有する全ての本を取得します。"""
-    return db.query(models.Book).filter(models.Book.user_id == user_id).all()
+def get_books_by_group(db: Session, group_id: int):
+    """グループに紐づく本を取得します。"""
+    return db.query(models.Book).filter(models.Book.group_id == group_id).all()
 
-def create_user_book(db: Session, book: schemas.BookCreate):
-    """ユーザーに関連付けて新しい本を登録します。"""
-    db_book = models.Book(
-        title=book.title,
-        total_pages=book.total_pages,
-        target_date=book.target_date,
-        user_id=book.user_id
-    )
+def create_book(db: Session, book: schemas.BookCreate):
+    db_book = models.Book(**book.model_dump())
     db.add(db_book)
     db.commit()
     db.refresh(db_book)
     return db_book
 
 def delete_book(db: Session, book_id: int):
-    """
-    本を削除します。
-    DB側のCASCADE設定により、紐づくProgressLogも自動的に削除されます。
-    """
     db_book = db.query(models.Book).filter(models.Book.id == book_id).first()
     if db_book:
         db.delete(db_book)
@@ -61,110 +44,87 @@ def delete_book(db: Session, book_id: int):
     return db_book
 
 # =================================================================
-# 3. 進捗計算ロジック (Progress Calculation)
+# 3. グループ操作
 # =================================================================
 
-def create_book_progress(db: Session, progress: schemas.ProgressCreate, book_id: int):
-    """特定のページ範囲の読書記録を保存します。"""
-    db_progress = models.ProgressLog(
+def get_group(db: Session, group_id: int):
+    return db.query(models.Group).filter(models.Group.id == group_id).first()
+
+def create_group(db: Session, group: schemas.GroupCreate, hashed_password: str):
+    db_group = models.Group(
+        name=group.name,
+        owner=group.owner,
+        is_lock=group.is_lock,
+        password_hash=hashed_password
+    )
+    db.add(db_group)
+    db.commit()
+    db.refresh(db_group)
+    return db_group
+
+def join_group(db: Session, group_id: int, user_id: int, password: str = None):
+    group = db.query(models.Group).filter(models.Group.id == group_id).first()
+    if not group:
+        return False, "グループが見つかりません"
+
+    existing = db.query(models.Membership).filter_by(group_id=group_id, user_id=user_id).first()
+    if existing:
+        return False, "すでに参加しています"
+
+    if group.is_lock and password != group.password_hash:
+        return False, "パスワードが間違っています"
+
+    db.add(models.Membership(group_id=group_id, user_id=user_id))
+    db.commit()
+    return True, "グループに参加しました"
+
+def leave_group(db: Session, group_id: int, user_id: int):
+    group = db.query(models.Group).filter(models.Group.id == group_id).first()
+    if not group:
+        return False, "グループが見つかりません"
+
+    if group.owner == user_id:
+        return False, "オーナーは退会できません。グループを削除してください。"
+
+    member = db.query(models.Membership).filter_by(group_id=group_id, user_id=user_id).first()
+    if not member:
+        return False, "グループに参加していません"
+
+    db.delete(member)
+    db.commit()
+    return True, "グループから退会しました"
+
+def get_user_groups(db: Session, user_id: int):
+    memberships = db.query(models.Membership).filter_by(user_id=user_id).all()
+    return [m.group for m in memberships]
+
+# =================================================================
+# 4. 進捗操作
+# =================================================================
+
+def create_progress(db: Session, progress: schemas.ProgressCreate, group_id: int, user_id: int):
+    db_progress = models.Progress(
         **progress.model_dump(),
-        book_id=book_id
+        group_id=group_id,
+        user_id=user_id
     )
     db.add(db_progress)
     db.commit()
     db.refresh(db_progress)
     return db_progress
 
+def get_group_progresses(db: Session, group_id: int):
+    return db.query(models.Progress).filter(models.Progress.group_id == group_id).all()
+
 def calculate_total_progress(logs):
-    """
-    【コアロジック】重複・連続する読書範囲を統合し、実質的な総読了ページ数を算出します。
-    
-    アルゴリズムの仕組み:
-    1. 全てのログを開始ページ順にソート。
-    2. 前の範囲の終わりと、今の範囲の始まりが重なっている、または連続(+1)していれば統合。
-    3. 統合された各ブロックの長さを合計。
-    
-    例: [[1, 10], [11, 20], [50, 60]] -> 統合結果: [[1, 20], [50, 60]] -> 合計: 31ページ
-    """
+    """重複・連続する読書範囲を統合し、実質的な総読了ページ数を算出します。"""
     if not logs:
         return 0
-    
-    # 1. 開始ページでソートして処理を効率化
     intervals = sorted([(log.start_page, log.end_page) for log in logs])
-    
-    # 2. 重複範囲をマージ (Merge Overlapping Intervals)
     merged = []
     for start, end in intervals:
-        # 初回、または現在の開始位置が「前の終了位置 + 1」より後ろなら、新しい区間として追加
-        if not merged or start > merged[-1][1] + 1: 
+        if not merged or start > merged[-1][1] + 1:
             merged.append([start, end])
         else:
-            # 重なっている、または「10ページ」の次に「11ページ」が来ている場合は末尾を更新
             merged[-1][1] = max(merged[-1][1], end)
-            
-    # 3. 各区間のページ数を算出 (終了 - 開始 + 1) して合計
-    total = sum(end - start + 1 for start, end in merged)
-    return total
-
-# =================================================================
-# 4. グループ操作 (Group Operations)
-# =================================================================
-
-def get_group_users(db: Session, group_id: int):
-    # 特定のグループに所属するユーザーを取得します。
-    # グループ取得
-    group = db.query(models.Group).filter(models.Group.id == group_id).first()
-    if not group:
-        return None, None
-    # グループメンバーからユーザIDを抽出
-    user_ids = [member.user_id for member in group.members]
-    return group.members, user_ids
-
-
-def join_group(db: Session, group_id: int, user_id: int, password: str = None):
-    # グループにユーザーを参加させる
-    group = db.query(models.Group).filter(models.Group.id == group_id).first()
-    if not group:
-        return False, "グループが見つかりません"
-    
-    # 参加前の重複チェック
-    existing_member = db.query(models.GroupMember).filter_by(group_id=group_id, user_id=user_id).first()
-    if existing_member:
-        return False, "すでに参加しています"
-    
-    # パスワードが必要な場合の検証
-    if group.is_lock and password != group.password:
-        return False, "パスワードが間違っています"
-    
-    # グループメンバーシップを作成
-    new_member = models.GroupMember(group_id=group_id, user_id=user_id)
-    db.add(new_member)
-    db.commit()
-    return True, "グループに参加しました"
-
-def leave_group(db: Session, group_id: int, user_id: int):
-    # グループからユーザーを退会させる
-    group = db.query(models.Group).filter(models.Group.id == group_id).first()
-    if not group:
-        return False, "グループが見つかりません"
-    
-    # 退会前の存在チェック
-    member = db.query(models.GroupMember).filter_by(group_id=group_id, user_id=user_id).first()
-    if not member:
-        return False, "グループに参加していません"
-    
-    # オーナーが退会しようとした場合の処理
-    if group.owner_id == user_id:
-        return False, "オーナーは退会できません。グループを削除してください。"
-    
-    # グループメンバーシップを削除
-    db.delete(member)
-    db.commit()
-    return True, "グループから退会しました"
-
-def get_user_groups(db: Session, user_id: int):
-    # ユーザーが所属しているグループを取得します。
-    memberships = db.query(models.GroupMember).filter_by(user_id=user_id).all()
-    groups = [membership.group.name for membership in memberships]
-    ids = [membership.group_id for membership in memberships]
-    return groups, ids
+    return sum(end - start + 1 for start, end in merged)
