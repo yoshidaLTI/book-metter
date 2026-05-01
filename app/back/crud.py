@@ -110,6 +110,33 @@ def calculate_total_progress(logs):
 # 4. グループ操作 (Group Operations)
 # =================================================================
 
+def create_group_with_book(db: Session, group_data: schemas.GroupCreate, user_id: int):
+    """【追加】本とグループを同時に作成し、作成者をオーナー兼メンバーとして登録します"""
+    # 1. まず本を保存
+    db_book = models.Book(**group_data.book.model_dump())
+    db.add(db_book)
+    db.commit()
+    db.refresh(db_book)
+
+    # 2. グループを保存
+    db_group = models.Group(
+        name=group_data.name,
+        book_id=db_book.id,
+        owner_id=user_id,
+        is_lock=group_data.is_lock,
+        password=group_data.password
+    )
+    db.add(db_group)
+    db.commit()
+    db.refresh(db_group)
+
+    # 3. オーナーを初期メンバーとして登録
+    new_member = models.GroupMember(group_id=db_group.id, user_id=user_id)
+    db.add(new_member)
+    db.commit()
+
+    return db_group
+
 def get_group_users(db: Session, group_id: int):
     # 特定のグループに所属するユーザーを取得します。
     # グループ取得
@@ -168,3 +195,74 @@ def get_user_groups(db: Session, user_id: int):
     groups = [membership.group.name for membership in memberships]
     ids = [membership.group_id for membership in memberships]
     return groups, ids
+
+def delete_group(db: Session, group_id: int, user_id: int):
+    """グループを削除します（オーナーのみ）"""
+    group = db.query(models.Group).filter(models.Group.id == group_id).first()
+    if not group:
+        return False, "グループが見つかりません"
+
+    if group.owner_id != user_id:
+        return False, "グループを削除する権限がありません"
+
+    # グループと紐づく本を取得して削除
+    book = db.query(models.Book).filter(models.Book.id == group.book_id).first()
+    db.delete(group)
+    if book:
+        db.delete(book)
+
+    db.commit()
+    return True, "グループを削除しました"
+
+
+def get_group_info(db: Session, group_id: int, user_id: int = None):
+    """グループ情報を取得し、リクエストした人が参加者かどうかの判定も返します"""
+    group = db.query(models.Group).filter(models.Group.id == group_id).first()
+    if not group:
+        return None, False
+
+    is_member = False
+    if user_id:
+        if group.owner_id == user_id:
+            is_member = True
+        else:
+            member = db.query(models.GroupMember).filter_by(group_id=group_id, user_id=user_id).first()
+            if member:
+                is_member = True
+
+    return group, is_member
+
+
+def update_group_settings(db: Session, group_id: int, user_id: int, settings: schemas.GroupSettingsUpdate):
+    """グループの設定と本の情報を更新します（オーナーのみ）"""
+    group = db.query(models.Group).filter(models.Group.id == group_id).first()
+    if not group:
+        return False, "グループが見つかりません"
+
+    if group.owner_id != user_id:
+        return False, "設定を変更する権限がありません"
+
+    # Noneでない（変更希望が送られてきた）項目だけを上書き
+    if settings.is_lock is not None:
+        group.is_lock = settings.is_lock
+    if settings.password is not None:
+        group.password = settings.password
+
+    if settings.book:
+        book = db.query(models.Book).filter(models.Book.id == group.book_id).first()
+        if book:
+            # Pydanticの機能を使って、未送信の項目(None)を無視して辞書化
+            update_data = settings.book.model_dump(exclude_unset=True)
+            for key, value in update_data.items():
+                setattr(book, key, value)
+
+    db.commit()
+    return True, "設定を更新しました"
+
+
+def search_groups_by_book(db: Session, book_name: str):
+    """本の名前でグループを検索します（部分一致）"""
+    groups = db.query(models.Group).join(models.Book).filter(
+        models.Book.title.ilike(f"%{book_name}%")
+    ).all()
+    return groups
