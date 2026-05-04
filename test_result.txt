@@ -1,0 +1,4 @@
+=============================== warnings summary ===============================
+app/back/database.py:14
+  /app/app/back/database.py:14: MovedIn20Warning: The ``declarative_base()`` function is now available as sqlalchemy.orm.declarative_base(). (deprecated since: 2.0) (Background on SQLAlchemy 2.0 at: https://sqlalche.me/e/b8d9)
+    Base = declarative_base()
