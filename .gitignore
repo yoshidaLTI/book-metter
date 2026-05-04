@@ -16,4 +16,6 @@ Thumbs.db
 
 # --- Docker ---
 # ログファイルなどは除外
-*.log.env
+*.log
+
+*.env
