@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 from . import models, schemas
+from typing import Optional
 from .auth_utils import verify_password
 
 # =================================================================
@@ -86,6 +87,22 @@ def update_group_book(db: Session, group_id: int, book_data: schemas.GroupBase):
     db.commit()
     db.refresh(db_group)
     return db_group
+
+def update_group(db: Session, group_id: int, update_data: schemas.GroupUpdate, hashed_password: Optional[str] = None):
+    """グループ設定を更新する"""
+    group = get_group(db, group_id)
+    if not group:
+        return None
+    if update_data.name is not None:
+        group.name = update_data.name
+    if update_data.is_lock is not None:
+        group.is_lock = update_data.is_lock
+    if hashed_password is not None:
+        group.password_hash = hashed_password
+    db.commit()
+    db.refresh(group)
+    return group
+
 
 def join_group(db: Session, group_id: int, user_id: int, password: str = None):
     group = get_group(db, group_id)

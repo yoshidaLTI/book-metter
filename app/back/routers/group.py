@@ -26,6 +26,7 @@ def get_all_groups(
     return crud.get_all_groups(db)
 
 
+
 @router.get("/my-list", response_model=list[schemas.Group])
 def get_my_groups(
     db: Session = Depends(database.get_db),
@@ -58,6 +59,25 @@ def search_by_book(
     if not results:
         raise HTTPException(status_code=404, detail="該当するグループが見つかりません")
     return results
+
+@router.patch("/{group_id}", response_model=schemas.Group)
+def update_group(
+    group_id: int,
+    update_data: schemas.GroupUpdate,
+    db: Session = Depends(database.get_db),
+    current_user_id: int = Depends(dependencies.get_current_user_id)
+):
+    """グループ設定を更新する。オーナーのみ可能。"""
+    group = crud.get_group(db, group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="グループが見つかりません")
+    if group.owner != current_user_id:
+        raise HTTPException(status_code=403, detail="オーナーのみ設定を変更できます")
+    
+    hashed = auth_utils.hash_password(update_data.password) if update_data.password else None
+    updated = crud.update_group(db, group_id, update_data, hashed)
+    return updated
+
 
 @router.get("/{group_id}", response_model=schemas.Group)
 def get_group(

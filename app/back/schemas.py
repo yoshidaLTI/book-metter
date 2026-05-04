@@ -52,6 +52,12 @@ class GroupBase(BaseModel):
 class GroupCreate(GroupBase):
     password: str
 
+class GroupUpdate(BaseModel):
+    name: Optional[str] = None
+    is_lock: Optional[bool] = None
+    password: Optional[str] = None  # 変更する場合のみ
+
+
 class Group(GroupBase):
     id: int
     progresses: List[Progress] = []
