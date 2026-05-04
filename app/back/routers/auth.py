@@ -4,18 +4,12 @@ from .. import database, crud, schemas, auth_utils
 from .. import dependencies
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
-@router.post("/signup")
+@router.post("/signup", response_model=schemas.User)
 def signup(user: schemas.UserCreate, db: Session = Depends(database.get_db)):
-    
-    # 1. ユーザー名が既に使われていないかチェック
     existing_user = crud.get_user_by_username(db, username=user.username)
     if existing_user:
         raise HTTPException(status_code=400, detail="Username already registered")
-        
-    # 2. パスワードを暗号化
     hashed = auth_utils.hash_password(user.password)
-    
-    # 3. crud.py を呼び出す（引数の渡し方を crud.py に合わせる！）
     return crud.create_user(db=db, user=user, hashed_password=hashed)
 
 
