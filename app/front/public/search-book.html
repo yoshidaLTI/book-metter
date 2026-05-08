@@ -36,6 +36,10 @@
         </div>
 
         <div class="search-box">
+            <select id="search-type" style="padding:12px; border:1px solid #ccc; border-radius:6px; font-size:1rem; background:#fff;">
+                <option value="title">タイトル</option>
+                <option value="author">著者</option>
+            </select>
             <input type="text" id="search-input" placeholder="書名・著者名で検索..." 
                 onkeydown="if(event.key==='Enter') runBookSearch()">
             <button class="btn-search" onclick="runBookSearch()">検索</button>

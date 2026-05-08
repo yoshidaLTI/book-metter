@@ -220,11 +220,15 @@ async function runBookSearch() {
     const q = document.getElementById('search-input').value.trim();
     if (!q) { alert("検索キーワードを入力してください"); return; }
 
+    
+    const type = document.getElementById('search-type').value;
     const container = document.getElementById('search-results');
     container.innerHTML = `<p style="text-align:center; color:#999; padding:30px;">検索中...</p>`;
 
     try {
-        const results = await searchGoogleBooks(q);
+        const results = type === 'title'
+            ? await searchGoogleBooksByTitle(q)
+            : await searchGoogleBooksByAuthor(q);
 
         if (!results || results.length === 0) {
             container.innerHTML = `<p style="text-align:center; color:#999; padding:30px;">該当する本が見つかりませんでした</p>`;
