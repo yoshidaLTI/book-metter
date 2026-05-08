@@ -285,14 +285,41 @@ function openCreateModal(book) {
     document.getElementById('create-modal').style.display   = 'flex';
 }
 
+function openCreateBookModal() {
+    document.getElementById('modal-book-title').innerText  = '';
+    document.getElementById('modal-book-author').innerText = '';
+    const coverEl = document.getElementById('modal-book-cover');
+    coverEl.src = '';
+    coverEl.style.display = 'none';
+
+    document.getElementById('modal-total-pages').value = '';
+    document.getElementById('modal-group-name').value  = '';
+    document.getElementById('modal-is-lock').checked   = false;
+    document.getElementById('modal-password').value    = '';
+    document.getElementById('password-field').style.display = 'none';
+    document.getElementById('create-book-modal').style.display   = 'flex';
+
+}    
+
 function closeCreateModal() {
     document.getElementById('create-modal').style.display = 'none';
+    selectedBook = null;
+}
+
+function closeCreateBookModal() {
+    document.getElementById('create-book-modal').style.display = 'none';
     selectedBook = null;
 }
 
 function togglePasswordField() {
     const isLock = document.getElementById('modal-is-lock').checked;
     document.getElementById('password-field').style.display = isLock ? 'block' : 'none';
+}
+
+
+function toggleBookPasswordField() {
+    const isLock = document.getElementById('modal-book-is-lock').checked;
+    document.getElementById('book-password-field').style.display = isLock ? 'block' : 'none';
 }
 
 async function submitCreateGroup() {
@@ -329,6 +356,49 @@ async function submitCreateGroup() {
         const group = await postCreateGroup(data);
         alert(`グループ「${group.name}」を作成しました！`);
         closeCreateModal();
+        window.location.href = `/public/group-detail.html?id=${group.id}`;
+    } catch (e) {
+        alert("エラー: " + e.message);
+    }
+}
+
+async function submitCreateBookGroup() {
+
+    const title = document.getElementById('modal-book-title-input').value.trim();
+    const author = document.getElementById('modal-book-author-input').value.trim();
+
+    const totalPages = parseInt(document.getElementById('modal-book-total-pages').value);
+    const groupName  = document.getElementById('modal-book-group-name').value.trim();
+    const isLock     = document.getElementById('modal-book-is-lock').checked;
+    const password   = document.getElementById('modal-book-password').value;
+
+    if (!title) { alert("タイトルを入力してください"); return; }
+    if (!totalPages || totalPages < 1) { alert("総ページ数を入力してください"); return; }
+    if (!groupName)                    { alert("グループ名を入力してください"); return; }
+    if (isLock && !password)           { alert("パスワードを入力してください"); return; }
+
+    const data = {
+        name:          groupName,
+        owner:         currentUser.id,
+        is_lock:       isLock,
+        password:      password || "none",
+        title:         title         || null,
+        total_pages:   totalPages,
+        author:        author        || null,
+        publisher:   null,
+        published_date: null,
+        description:    null,
+        self_link:      null,
+        api_id:         null,
+        api_etag:       null,
+        small_cover_url: null,
+        cover_url:      null,
+    };
+
+    try {
+        const group = await postCreateGroup(data);
+        alert(`グループ「${group.name}」を作成しました！`);
+        closeCreateBookModal();
         window.location.href = `/public/group-detail.html?id=${group.id}`;
     } catch (e) {
         alert("エラー: " + e.message);

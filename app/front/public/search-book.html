@@ -48,6 +48,15 @@
         <div id="search-results"></div>
     </section>
 </main>
+<footer>
+    <!-- 本の情報を手入力するためのリンク -->
+    <div style="text-align:center; margin-top:30px;">
+        <p style="color:#555; font-size:0.9rem; margin-bottom:8px; display:inline" >検索したい本が見つからない場合はこちら</p>
+        <button onclick="openCreateBookModal()" style="background:none; border:none; color:#007BFF; padding:0; font-size:0.9rem; cursor:pointer; text-decoration:none;">
+    📖 本の情報を手入力してグループを作成する
+    </button>  
+    </div>
+</footer>
 
 <!-- グループ作成モーダル -->
 <div id="create-modal" class="modal-overlay" style="display:none;">
@@ -96,6 +105,56 @@
 
         <button class="btn-record" style="width:100%; padding:12px; font-size:1rem;"
             onclick="submitCreateGroup()">グループを作成する</button>
+    </div>
+</div>
+<!-- 本の情報入力モーダル -->
+<div id="create-book-modal" class="modal-overlay" style="display:none;">
+    <div class="modal-content">
+        <span class="modal-close" onclick="closeCreateBookModal()">✕</span>
+        <h3 style="margin-top:0; margin-bottom:5px;">本の情報を入力する</h3>
+
+        <div class="form-group" style="margin-bottom:15px;">
+            <label>タイトル <span style="color:red;">*</span></label>
+            <input type="text" id="modal-book-title-input" placeholder="例: リーダブルコード"
+                style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px;
+                font-size:1rem; box-sizing:border-box;">
+        </div>
+        <div class="form-group" style="margin-bottom:15px;">
+            <label>著者 <span style="color:red;">*</span></label>
+            <input type="text" id="modal-book-author-input" placeholder="例: 三好太郎"
+                style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px;
+                font-size:1rem; box-sizing:border-box;">
+        </div>
+        <div class="form-group" style="margin-bottom:15px;">
+            <label>総ページ数 <span style="color:red;">*</span></label>
+            <input type="number" id="modal-book-total-pages" placeholder="例: 237" min="1"
+                style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px;
+                font-size:1rem; box-sizing:border-box;">
+        </div>
+
+        <div class="form-group" style="margin-bottom:15px;">
+            <label>グループ名 <span style="color:red;">*</span></label>
+            <input type="text" id="modal-book-group-name" placeholder="例: リーダブルコード輪読会"
+                style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px;
+                font-size:1rem; box-sizing:border-box;">
+        </div>
+
+        <div class="form-group" style="margin-bottom:15px;">
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                <input type="checkbox" id="modal-book-is-lock" onchange="toggleBookPasswordField()">
+                <span>🔒 参加にパスワードを設定する</span>
+            </label>
+        </div>
+
+        <div id="book-password-field" class="form-group" style="margin-bottom:20px; display:none;">
+            <label>パスワード</label>
+            <input type="password" id="modal-book-password" placeholder="パスワードを入力"
+                style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px;
+                font-size:1rem; box-sizing:border-box;">
+        </div>
+
+        <button class="btn-record" style="width:100%; padding:12px; font-size:1rem;"
+            onclick="submitCreateBookGroup()">グループを作成する</button>
     </div>
 </div>
 
