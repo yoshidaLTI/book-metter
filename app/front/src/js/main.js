@@ -220,11 +220,15 @@ async function runBookSearch() {
     const q = document.getElementById('search-input').value.trim();
     if (!q) { alert("検索キーワードを入力してください"); return; }
 
+    
+    const type = document.getElementById('search-type').value;
     const container = document.getElementById('search-results');
     container.innerHTML = `<p style="text-align:center; color:#999; padding:30px;">検索中...</p>`;
 
     try {
-        const results = await searchGoogleBooks(q);
+        const results = type === 'title'
+            ? await searchGoogleBooksByTitle(q)
+            : await searchGoogleBooksByAuthor(q);
 
         if (!results || results.length === 0) {
             container.innerHTML = `<p style="text-align:center; color:#999; padding:30px;">該当する本が見つかりませんでした</p>`;
@@ -266,20 +270,33 @@ function renderBookResult(book) {
 }
 
 function openCreateModal(book) {
-    selectedBook = book;
-    document.getElementById('modal-book-title').innerText  = book.title || '(タイトル不明)';
-    document.getElementById('modal-book-author').innerText = book.author || '';
-    const coverEl = document.getElementById('modal-book-cover');
-    coverEl.src = book.small_cover_url || '';
-    coverEl.style.display = book.small_cover_url ? 'block' : 'none';
-
-    document.getElementById('modal-total-pages').value = '';
+    if (!book) {
+        document.getElementById('modal-book-title').innerText  = '';
+        document.getElementById('modal-book-author').innerText = '';
+        const coverEl = document.getElementById('modal-book-cover');
+        coverEl.src = '';
+        coverEl.style.display = 'none';
+        document.getElementById('modal-book-info').style.display = 'none';
+        document.getElementById('modal-book-info-inputs').style.display = 'block';
+    document.getElementById('modal-group-name').value  = '';
+    }else {
+        selectedBook = book;
+        document.getElementById('modal-book-title').innerText  = book.title || '(タイトル不明)';
+        document.getElementById('modal-book-author').innerText = book.author || '';
+        const coverEl = document.getElementById('modal-book-cover');
+        coverEl.src = book.small_cover_url || '';
+        coverEl.style.display = book.small_cover_url ? 'block' : 'none';
+        document.getElementById('modal-book-info').style.display = 'flex';
+        document.getElementById('modal-book-info-inputs').style.display = 'none';
     document.getElementById('modal-group-name').value  = book.title ? `${book.title}読書会` : '';
+    }
+    document.getElementById('modal-total-pages').value = '';
     document.getElementById('modal-is-lock').checked   = false;
     document.getElementById('modal-password').value    = '';
     document.getElementById('password-field').style.display = 'none';
     document.getElementById('create-modal').style.display   = 'flex';
 }
+
 
 function closeCreateModal() {
     document.getElementById('create-modal').style.display = 'none';
@@ -291,8 +308,14 @@ function togglePasswordField() {
     document.getElementById('password-field').style.display = isLock ? 'block' : 'none';
 }
 
+
+
 async function submitCreateGroup() {
-    if (!selectedBook || !currentUser) return;
+    if (!currentUser) return;
+    const title = selectedBook?.title || document.getElementById('modal-title-input').value.trim();
+    const author = selectedBook?.author || document.getElementById('modal-author-input').value.trim();
+
+    if (!title) { alert("タイトルを入力してください"); return; }
 
     const totalPages = parseInt(document.getElementById('modal-total-pages').value);
     const groupName  = document.getElementById('modal-group-name').value.trim();
@@ -308,17 +331,17 @@ async function submitCreateGroup() {
         owner:         currentUser.id,
         is_lock:       isLock,
         password:      password || "none",
-        title:         selectedBook.title         || null,
+        title:         title || null,
         total_pages:   totalPages,
-        author:        selectedBook.author        || null,
-        publisher:     selectedBook.publisher     || null,
-        published_date:selectedBook.published_date|| null,
-        description:   selectedBook.description   || null,
-        self_link:     selectedBook.self_link      || null,
-        api_id:        selectedBook.api_id         || null,
-        api_etag:      selectedBook.api_etag       || null,
-        small_cover_url:selectedBook.small_cover_url|| null,
-        cover_url:     selectedBook.cover_url      || null,
+        author:        author || null,
+        publisher: selectedBook?.publisher ?? null,
+        published_date:selectedBook?.published_date  ?? null,
+        description:   selectedBook?.description   ?? null,
+        self_link:     selectedBook?.self_link     ?? null,
+        api_id:        selectedBook?.api_id        ?? null,
+        api_etag:      selectedBook?.api_etag      ?? null,
+        small_cover_url:selectedBook?.small_cover_url ?? null,
+        cover_url:     selectedBook?.cover_url     ?? null,
     };
 
     try {
@@ -330,6 +353,7 @@ async function submitCreateGroup() {
         alert("エラー: " + e.message);
     }
 }
+
 
 // ========================================
 // bookshelf.html: 自分の本棚

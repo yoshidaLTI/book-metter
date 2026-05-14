@@ -174,8 +174,13 @@ async function uploadProgressFile(groupId, progressId, file) {
 // ========================
 // 本の検索（Google Books）
 // ========================
-async function searchGoogleBooks(q) {
-    const res = await fetch(`${API_BASE}/books/search?q=${encodeURIComponent(q)}`);
+async function searchGoogleBooksByTitle(q) {
+    const res = await fetch(`${API_BASE}/books/search?q=intitle:${encodeURIComponent(q)}`);
+    if (!res.ok) throw new Error("本の検索に失敗しました");
+    return res.json();
+}
+async function searchGoogleBooksByAuthor(q) {
+    const res = await fetch(`${API_BASE}/books/search?q=inauthor:${encodeURIComponent(q)}`);
     if (!res.ok) throw new Error("本の検索に失敗しました");
     return res.json();
 }
