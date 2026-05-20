@@ -1,3 +1,4 @@
+from operator import is_
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
@@ -96,6 +97,9 @@ class RecommendBase(BaseModel):
 # DBに保存するためのモデル
 class RecommendCreate(RecommendBase):
     pass
+
+class RecommendUpdate(BaseModel):
+    is_active: Optional[bool] = None
 
 # DBから読み込むためのモデル
 class Recommend(RecommendBase):
