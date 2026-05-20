@@ -86,3 +86,20 @@ class GroupMember(MembershipBase):
 
     class Config:
         from_attributes = True
+
+# おすすめ本の共通フィールド
+class RecommendBase(BaseModel):
+    api_id: str
+    title: str
+    is_active: bool = True
+
+# DBに保存するためのモデル
+class RecommendCreate(RecommendBase):
+    pass
+
+# DBから読み込むためのモデル
+class Recommend(RecommendBase):
+    id: int
+
+    class Config:
+        from_attributes = True
