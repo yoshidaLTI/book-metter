@@ -69,6 +69,7 @@ def create_group(db: Session, group: schemas.GroupCreate, hashed_password: str):
     # オーナーを membership に自動追加
     membership = models.Membership(group_id=db_group.id, user_id=group.owner)
     db.add(membership)
+    
     # Progressのmemoとして「ownerがグループを作成しました」
     # が出力されるように変更
     owner_user = get_user(db, group.owner)
