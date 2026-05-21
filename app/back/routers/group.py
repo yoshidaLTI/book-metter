@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query ,UploadFile, File
 from sqlalchemy.orm import Session
 from .. import database, crud, schemas, auth_utils ,models
 from .. import dependencies
+from mimetypes import guess_type
 
 import os
 import uuid
@@ -241,9 +242,14 @@ async def upload_progress_file(
 
 
     os.makedirs(UPLOAD_DIR, exist_ok=True)
+
     ext = os.path.splitext(file.filename)[1]
     filename = f"{uuid.uuid4()}{ext}"
     filepath = os.path.join(UPLOAD_DIR, filename)
+
+    mime_type, encoding = guess_type(filename)
+    if not mime_type:
+        mime_type = file.content_type or "application/octet-stream"
 
     with open(filepath, "wb") as f:
         content = await file.read()
