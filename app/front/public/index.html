@@ -32,6 +32,12 @@
     <section id="my-groups-section">
         <div class="section-header">
             <h2>📖 参加中のグループ</h2>
+            <div class="filter-tabs">
+                <button class="filter-btn active" onclick="filterIndexGroups('all')">すべて</button>
+                <button class="filter-btn" onclick="filterIndexGroups('unread')">未読</button>
+                <button class="filter-btn" onclick="filterIndexGroups('reading')">輪講中</button>
+                <button class="filter-btn" onclick="filterIndexGroups('done')">読了</button>
+            </div>
         </div>
         <div id="group-list" class="group-list">
             <p style="color:#999; text-align:center; grid-column: 1/-1;">読み込み中...</p>
