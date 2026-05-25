@@ -608,7 +608,10 @@ function renderGroupDetail(group, progresses) {
                             ${isMe ? '自分' : escapeHtml(username)}
                         </span>
                     </div>
-                    ${p.memo ? `<p class="history-memo" style="margin:6px 0 0;">${escapeHtml(p.memo)}</p>` : ''}
+                    ${p.memo ? `
+                    <p class="history-memo collapsed" id="memo-${p.id}">${escapeHtml(p.memo)}</p>
+                    <button class="read-more-btn" id="memo-btn-${p.id}" onclick="toggleMemo(${p.id})">続きを読む</button>
+                    ` : ''}
                     ${actions}
                 </div>`;
         }).join('');
@@ -678,6 +681,8 @@ function renderGroupDetail(group, progresses) {
             <h3 style="margin:0 0 15px; font-size:1.1rem;">📜 進捗履歴</h3>
             <div class="history-list">${historyHtml}</div>
         </div>`;
+
+    initMemoToggleButtons();
 }
 
 async function submitDetailProgress(groupId, totalPages) {
@@ -901,4 +906,29 @@ async function handleDeleteGroup(groupId) {
     } catch (e) {
         alert("エラー: " + e.message);
     }
+}
+
+function toggleMemo(id) {
+    const memo = document.getElementById(`memo-${id}`);
+    const btn = document.getElementById(`memo-btn-${id}`);
+    if (memo.classList.contains('collapsed')) {
+        memo.classList.remove('collapsed');
+        btn.textContent = '閉じる';
+    } else {
+        memo.classList.add('collapsed');
+        btn.textContent = '続きを読む';
+    }
+}
+
+function initMemoToggleButtons() {
+    document.querySelectorAll('.history-memo.collapsed').forEach(memo => {
+        const id = memo.id.replace('memo-', '');
+        const btn = document.getElementById(`memo-btn-${id}`);
+        if (!btn) return;
+        // scrollHeight は overflow に関わらず全体の高さを返す
+        // clientHeight は表示領域の高さ（clamp による切り詰め後）
+        if (memo.scrollHeight <= memo.clientHeight) {
+            btn.style.display = 'none';
+        }
+    });
 }
