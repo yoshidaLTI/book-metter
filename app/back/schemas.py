@@ -92,6 +92,15 @@ class GroupMember(MembershipBase):
 class RecommendBase(BaseModel):
     api_id: str
     title: str
+    author: Optional[str] = None
+    publisher: Optional[str] = None
+    published_date: Optional[str] = None
+    description: Optional[str] = None
+    small_cover_url: Optional[str] = None
+    cover_url: Optional[str] = None
+    self_link: Optional[str] = None
+    api_etag: Optional[str] = None
+    total_pages: Optional[int] = None
     is_active: bool = True
 
 # DBに保存するためのモデル
