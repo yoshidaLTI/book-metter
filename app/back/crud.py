@@ -242,3 +242,28 @@ def calculate_total_progress(logs):
         else:
             merged[-1][1] = max(merged[-1][1], end)
     return sum(end - start + 1 for start, end in merged)
+
+# =================================================================
+# 4. おすすめの本
+# =================================================================
+# おすすめの本を取得する（is_active=Trueのものだけ）
+def get_recommend(db: Session):
+    return db.query(models.Recommend).filter_by(is_active=True).all()
+
+# おすすめの本を作成する
+def create_recommend(db: Session, recommend: schemas.RecommendCreate):
+    db_recommend = models.Recommend(**recommend.model_dump())
+    db.add(db_recommend)
+    db.commit()
+    db.refresh(db_recommend)
+    return db_recommend
+
+# おすすめの本を削除する
+def update_recommend_active(db: Session, recommend_id: int, is_active: bool):
+    recommend = db.query(models.Recommend).filter(models.Recommend.id == recommend_id).first()
+    if not recommend:
+        return None
+    recommend.is_active = is_active
+    db.commit()
+    db.refresh(recommend)
+    return recommend
