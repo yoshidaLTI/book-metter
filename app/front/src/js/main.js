@@ -54,8 +54,9 @@ function escapeHtml(str) {
 }
 
 function calculateTotalRead(progresses) {
-    if (!progresses.length) return 0;
-    const intervals = progresses
+    const valid = progresses.filter(p => p.start_page > 0 && p.end_page >= p.start_page);
+    if (!valid.length) return 0;
+    const intervals = valid
         .map(p => [p.start_page, p.end_page])
         .sort((a, b) => a[0] - b[0]);
     const merged = [];
@@ -72,6 +73,48 @@ function calculateTotalRead(progresses) {
 // ========================================
 // index.html: 参加中グループ一覧
 // ========================================
+let allMyGroupsIndex = [];
+
+function getGroupStatus(group) {
+    const totalPages = group.total_pages || 0;
+    const myProgresses = (group.progresses || []).filter(p => p.user_id === currentUser.id);
+    const totalRead = calculateTotalRead(myProgresses);
+    const percent = totalPages > 0 ? Math.min(100, Math.round((totalRead / totalPages) * 100)) : 0;
+    if (percent === 100) return 'done';
+    if (percent > 0) return 'reading';
+    return 'unread';
+}
+
+function renderIndexGroups(groups) {
+    const container = document.getElementById('group-list');
+    if (groups.length === 0) {
+        container.innerHTML = `<p style="color:#999; text-align:center; grid-column:1/-1;">該当するグループが見つかりませんでした</p>`;
+        return;
+    }
+    const displayGroups = groups.slice(0, 20);
+    container.innerHTML = displayGroups.map(renderGroupCard).join('');
+    if (groups.length > 20) {
+        container.innerHTML += `
+            <div style="grid-column:1/-1; text-align:right; padding-top:10px;">
+                <a href="/public/bookshelf.html" style="font-weight:bold;">もっと見る →</a>
+            </div>`;
+    }
+}
+
+function filterIndexGroups(status) {
+    //選択中のステータスをここで保存
+    sessionStorage.setItem('indexFilter', status);
+    document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+    event.currentTarget.classList.add('active');
+
+    if (status === 'all') {
+        renderIndexGroups(allMyGroupsIndex);
+        return;
+    }
+    const filtered = allMyGroupsIndex.filter(g => getGroupStatus(g) === status);
+    renderIndexGroups(filtered);
+}
+
 async function loadMyGroups() {
     const container = document.getElementById('group-list');
     try {
@@ -104,6 +147,12 @@ async function loadMyGroups() {
             const latestB = b.progresses.length > 0 ? b.progresses[0].id : -1;
             return latestB - latestA;
         });
+
+        allMyGroupsIndex = groupsWithProgress;
+        // 保存したページの情報を読み込む
+        const savedFilter = sessionStorage.getItem('indexFilter') || 'all';
+        // フィルタを適用して描画
+        savedFilter === 'all' ? renderIndexGroups(allMyGroupsIndex) : renderIndexGroups(allMyGroupsIndex.filter(g => getGroupStatus(g) === savedFilter));
 
         const displayGroups = groupsWithProgress.slice(0, 20);
         container.innerHTML = displayGroups.map(renderGroupCard).join('');
@@ -632,7 +681,10 @@ function renderGroupDetail(group, progresses) {
                             ${isMe ? '自分' : escapeHtml(username)}
                         </span>
                     </div>
-                    ${p.memo ? `<p class="history-memo" style="margin:6px 0 0;">${escapeHtml(p.memo)}</p>` : ''}
+                    ${p.memo ? `
+                    <p class="history-memo collapsed" id="memo-${p.id}">${escapeHtml(p.memo)}</p>
+                    <button class="read-more-btn" id="memo-btn-${p.id}" onclick="toggleMemo(${p.id})">続きを読む</button>
+                    ` : ''}
                     ${actions}
                 </div>`;
         }).join('');
@@ -702,6 +754,8 @@ function renderGroupDetail(group, progresses) {
             <h3 style="margin:0 0 15px; font-size:1.1rem;">📜 進捗履歴</h3>
             <div class="history-list">${historyHtml}</div>
         </div>`;
+
+    initMemoToggleButtons();
 }
 
 async function submitDetailProgress(groupId, totalPages) {
@@ -925,4 +979,29 @@ async function handleDeleteGroup(groupId) {
     } catch (e) {
         alert("エラー: " + e.message);
     }
+}
+
+function toggleMemo(id) {
+    const memo = document.getElementById(`memo-${id}`);
+    const btn = document.getElementById(`memo-btn-${id}`);
+    if (memo.classList.contains('collapsed')) {
+        memo.classList.remove('collapsed');
+        btn.textContent = '閉じる';
+    } else {
+        memo.classList.add('collapsed');
+        btn.textContent = '続きを読む';
+    }
+}
+
+function initMemoToggleButtons() {
+    document.querySelectorAll('.history-memo.collapsed').forEach(memo => {
+        const id = memo.id.replace('memo-', '');
+        const btn = document.getElementById(`memo-btn-${id}`);
+        if (!btn) return;
+        // scrollHeight は overflow に関わらず全体の高さを返す
+        // clientHeight は表示領域の高さ（clamp による切り詰め後）
+        if (memo.scrollHeight <= memo.clientHeight) {
+            btn.style.display = 'none';
+        }
+    });
 }

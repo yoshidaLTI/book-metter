@@ -222,20 +222,48 @@ def delete_progress(db: Session, progress_id: int):
     return True
 
 
-# def calculate_total_progress(logs):
-#     if not logs:
-#         return 0
-#     intervals = sorted(
-#         (log.start_page, log.end_page)
-#         for log in logs
-#         if log.start_page > 0 and log.end_page >= log.start_page
-#     )
-#     if not intervals:
-#         return 0
-#     merged = []
-#     for start, end in intervals:
-#         if not merged or start > merged[-1][1] + 1:
-#             merged.append([start, end])
-#         else:
-#             merged[-1][1] = max(merged[-1][1], end)
-#     return sum(end - start + 1 for start, end in merged)
+def calculate_total_progress(logs):
+    if not logs:
+        return 0
+    intervals = sorted(
+        (log.start_page, log.end_page)
+        for log in logs
+        if log.start_page > 0 and log.end_page >= log.start_page
+        # start_pageが0以上であることを条件に追加することで
+        # グループ作成時に自動的に追加するinitial_progress(start_page=end_page=0)
+        # を読んだ合計ページ数として計算させないようにする
+    )
+    if not intervals:
+        return 0
+    merged = []
+    for start, end in intervals:
+        if not merged or start > merged[-1][1] + 1:
+            merged.append([start, end])
+        else:
+            merged[-1][1] = max(merged[-1][1], end)
+    return sum(end - start + 1 for start, end in merged)
+
+# =================================================================
+# 4. おすすめの本
+# =================================================================
+# おすすめの本を取得する（is_active=Trueのものだけ）
+def get_recommend(db: Session):
+    return db.query(models.Recommend).filter_by(is_active=True).all()
+
+# おすすめの本を作成する
+def create_recommend(db: Session, recommend: schemas.RecommendCreate):
+    db_recommend = models.Recommend(**recommend.model_dump())
+    db.add(db_recommend)
+    db.commit()
+    db.refresh(db_recommend)
+    return db_recommend
+
+# おすすめの本を削除する
+def update_recommend_active(db: Session, recommend_id: int, is_active: bool):
+    recommend = db.query(models.Recommend).filter(models.Recommend.id == recommend_id).first()
+    if not recommend:
+        return None
+    recommend.is_active = is_active
+    db.commit()
+    db.refresh(recommend)
+    return recommend

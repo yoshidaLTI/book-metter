@@ -1,3 +1,4 @@
+from operator import is_
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
@@ -83,6 +84,35 @@ class GroupMemberCreate(MembershipBase):
 class GroupMember(MembershipBase):
     group_id: int
     user_id: int
+
+    class Config:
+        from_attributes = True
+
+# おすすめ本の共通フィールド
+class RecommendBase(BaseModel):
+    api_id: str
+    title: str
+    author: Optional[str] = None
+    publisher: Optional[str] = None
+    published_date: Optional[str] = None
+    description: Optional[str] = None
+    small_cover_url: Optional[str] = None
+    cover_url: Optional[str] = None
+    self_link: Optional[str] = None
+    api_etag: Optional[str] = None
+    total_pages: Optional[int] = None
+    is_active: bool = True
+
+# DBに保存するためのモデル
+class RecommendCreate(RecommendBase):
+    pass
+
+class RecommendUpdate(BaseModel):
+    is_active: Optional[bool] = None
+
+# DBから読み込むためのモデル
+class Recommend(RecommendBase):
+    id: int
 
     class Config:
         from_attributes = True
