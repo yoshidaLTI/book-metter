@@ -49,6 +49,12 @@ main { max-width: 1000px; margin: 0 auto 40px; padding: 0 20px; }
 }
 .section-header h2 { font-size: 1.3rem; margin: 0; }
 
+/* フィルタボタン */
+.filter-tabs { display: flex; gap: 6px; }
+.filter-btn { padding: 5px 14px; border: 1px solid #ccc; background: #fff; border-radius: 20px; font-size: 0.85rem; cursor: pointer; color: var(--text-main); transition: 0.15s; }
+.filter-btn:hover { border-color: var(--primary-color); color: var(--primary-color); }
+.filter-btn.active { background: var(--primary-color); color: #fff; border-color: var(--primary-color); font-weight: bold; }
+
 .add-btn-small { background-color: #4CAF50; color: white; padding: 8px 16px; border-radius: 6px; font-weight: bold; font-size: 0.95rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: 0.2s; }
 .add-btn-small:hover { background-color: #45a049; text-decoration: none; transform: translateY(-1px); }
 
