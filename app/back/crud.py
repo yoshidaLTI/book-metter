@@ -64,13 +64,34 @@ def create_group(db: Session, group: schemas.GroupCreate, hashed_password: str):
         cover_url=group.cover_url,
     )
     db.add(db_group)
-    db.commit()
-    db.refresh(db_group)
+    db.flush()
 
     # オーナーを membership に自動追加
     membership = models.Membership(group_id=db_group.id, user_id=group.owner)
     db.add(membership)
+    
+    # Progressのmemoとして「ownerがグループを作成しました」
+    # が出力されるように変更
+    owner_user = get_user(db, group.owner)
+    initial_memo = (
+        f"{owner_user.username} がグループを作成しました"
+        if owner_user
+        else "グループを作成しました"
+    )
+
+    # 読書量には含めない初期進捗を追加することで
+    # グループ作成後に作成したグループを先頭に表示する
+    initial_progress = models.Progress(
+        group_id=db_group.id,
+        user_id=group.owner,
+        start_page=0,
+        end_page=0,
+        memo=initial_memo
+    )
+    db.add(initial_progress)
+
     db.commit()
+    db.refresh(db_group)
 
     return db_group
 def update_group_book(db: Session, group_id: int, book_data: schemas.GroupBase):
@@ -204,7 +225,16 @@ def delete_progress(db: Session, progress_id: int):
 def calculate_total_progress(logs):
     if not logs:
         return 0
-    intervals = sorted([(log.start_page, log.end_page) for log in logs])
+    intervals = sorted(
+        (log.start_page, log.end_page)
+        for log in logs
+        if log.start_page > 0 and log.end_page >= log.start_page
+        # start_pageが0以上であることを条件に追加することで
+        # グループ作成時に自動的に追加するinitial_progress(start_page=end_page=0)
+        # を読んだ合計ページ数として計算させないようにする
+    )
+    if not intervals:
+        return 0
     merged = []
     for start, end in intervals:
         if not merged or start > merged[-1][1] + 1:
