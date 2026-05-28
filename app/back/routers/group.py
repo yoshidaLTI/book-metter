@@ -1,3 +1,9 @@
+import mimetypes
+import shutil  # 不要になるが他で使っていれば残す
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, status
+from sqlalchemy.orm import Session
+from .. import database, crud, schemas, auth_utils ,models
+from .. import dependencies
 from fastapi import APIRouter, Depends, HTTPException, Query ,UploadFile, File
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
@@ -10,6 +16,29 @@ import uuid
 
 router = APIRouter(prefix="/api/groups", tags=["groups"])
 
+# 🚨 1. 危険なファイル（実行ファイル）のブラックリスト
+DANGER_MAGIC_NUMBERS = {
+    b'MZ': 'application/x-msdownload',       # Windowsの .exe / .dll
+    b'\x7fELF': 'application/x-elf',         # Linuxの実行ファイル
+    b'\xca\xfe\xba\xbe': 'application/x-mach-binary', # Macの実行ファイル
+}
+
+# 🟢 2. 中身を厳格にチェックしたいファイルのマジックナンバー
+SAFE_MAGIC_NUMBERS = {
+    b'\x89PNG\r\n\x1a\n': 'image/png',
+    b'\xff\xd8\xff': 'image/jpeg',
+    b'%PDF-': 'application/pdf',
+}
+
+# 📋 3. 読書メーターアプリで許可するファイル形式（ホワイトリスト）
+# パワポやWordは「PDF統一」にしたため、これだけで全てのユースケースをカバー！
+ALLOWED_MIME_TYPES = {
+    "image/png",
+    "image/jpeg",
+    "text/plain",         # ソースコード貼り付け用のテキストファイル
+    "application/pdf"     # 発表スライド、レポートなどの資料用PDF
+}
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 5MB
 
 @router.post("/", response_model=schemas.Group)
 def create_group(
@@ -216,7 +245,7 @@ def delete_progress(
 #~=================================================================
 #　ファイルアップロードのためのエンドポイント
 #~=================================================================
-UPLOAD_DIR = "/app/uploads"
+UPLOAD_DIR = "/app/back/uploads"
 
 @router.post("/{group_id}/progress/{progress_id}/upload", response_model=schemas.Progress)
 async def upload_progress_file(
@@ -226,33 +255,69 @@ async def upload_progress_file(
     db: Session = Depends(database.get_db),
     current_user_id: int = Depends(dependencies.get_current_user_id)
 ):
-    """進捗にファイルを添付する。グループメンバーであれば誰でも可能。"""
-    group = crud.get_group(db, group_id)
-    if not group:
-        raise HTTPException(status_code=404, detail="グループが見つかりません")
+    # ステップ0：申告サイズの事前足切り
+    if file.size and file.size > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="ファイルサイズが上限（10MB）を超えています。")
 
-    progress = db.query(models.Progress).filter(models.Progress.id == progress_id).first()
+    # ステップ1：先頭8バイトでマジックナンバー取得
+    header = await file.read(8)
+    await file.seek(0)
+
+    # ステップ2：チャンク読み込みで実サイズ確認（メモリ安全）
+    actual_size = 0
+    chunks = []
+    while True:
+        chunk = await file.read(65536)  # 64KBずつ読む
+        if not chunk:
+         break
+        actual_size += len(chunk)
+        if actual_size > MAX_FILE_SIZE:
+            raise HTTPException(status_code=413, detail="ファイルサイズが上限（5MB）を超えています。")
+        chunks.append(chunk)
+    await file.seek(0)
+
+    # ステップ3：実行ファイル偽装チェック
+    for danger_magic in DANGER_MAGIC_NUMBERS.keys():
+        if header.startswith(danger_magic):
+            raise HTTPException(status_code=400, detail="不正なファイル形式です。実行ファイルはアップロードできません。")
+
+    # ステップ4：MIMEタイプ判定
+    mime_type = None
+    for magic, mime in SAFE_MAGIC_NUMBERS.items():
+        if header.startswith(magic):
+            mime_type = mime
+            break
+    if not mime_type:
+        mime_type, _ = mimetypes.guess_type(file.filename)
+        if not mime_type:
+            mime_type = file.content_type or "application/octet-stream"
+
+    # ステップ5：ホワイトリストチェック
+    if mime_type not in ALLOWED_MIME_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"許可されていない形式です ({mime_type})。画像(PNG/JPEG)、テキスト(.txt)、資料(PDF)のみアップロード可能です。"
+        )
+
+    # ステップ6：保存
+    filename = f"{uuid.uuid4()}_{file.filename}"
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    file_location = os.path.join(UPLOAD_DIR, filename)
+
+    with open(file_location, "wb") as f:
+        f.write(b"".join(chunks))
+
+    # ステップ7：所有者確認してDB更新
+    progress = db.query(models.Progress).filter(
+        models.Progress.id == progress_id,
+        models.Progress.group_id == group_id,
+        models.Progress.user_id == current_user_id
+    ).first()
     if not progress:
-        raise HTTPException(status_code=404, detail="進捗が見つかりません")
-    
-    # グループメンバーかチェック
-    if not crud.is_group_member(db, group_id, current_user_id):
-        raise HTTPException(status_code=403, detail="グループメンバーのみアップロードできます")
-
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
-    ext = os.path.splitext(file.filename)[1]
-    filename = f"{uuid.uuid4()}{ext}"
-    filepath = os.path.join(UPLOAD_DIR, filename)
-
-    with open(filepath, "wb") as f:
-        content = await file.read()
-        f.write(content)
+        raise HTTPException(status_code=404, detail="指定された進捗データが見つかりません。")
 
     progress.url = f"/uploads/{filename}"
-    progress.file_type = file.content_type
+    progress.file_type = mime_type
     db.commit()
     db.refresh(progress)
 
