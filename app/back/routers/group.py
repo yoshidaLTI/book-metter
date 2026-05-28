@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query ,UploadFile, File
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from .. import database, crud, schemas, auth_utils ,models
 from .. import dependencies
+import urllib.parse
 
 import os
 import uuid
@@ -255,3 +257,60 @@ async def upload_progress_file(
     db.refresh(progress)
 
     return progress
+
+
+#~=================================================================
+#　ファイルダウンロードのためのエンドポイント
+#~=================================================================
+@router.get("/{group_id}/progress/{progress_id}/download")
+async def download_progress_file(
+    group_id: int,
+    progress_id: int,
+    db: Session = Depends(database.get_db),
+    current_user_id: int = Depends(dependencies.get_current_user_id)
+):
+    """進捗に添付されたファイルをダウンロードする。グループメンバーであれば誰でも可能。"""
+    # 1. グループの存在チェック
+    group = crud.get_group(db, group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="グループが見つかりません")
+
+    # 2. 進捗の存在チェック
+    progress = db.query(models.Progress).filter(models.Progress.id == progress_id).first()
+    if not progress:
+        raise HTTPException(status_code=404, detail="進捗が見つかりません")
+    
+    # 3. グループメンバーかチェック（セキュリティ）
+    if not crud.is_group_member(db, group_id, current_user_id):
+        raise HTTPException(status_code=403, detail="グループメンバーのみダウンロードできます")
+
+    # 4. ファイルが添付されているかチェック
+    if not progress.url:
+        raise HTTPException(status_code=404, detail="この進捗にファイルは添付されていません")
+
+    # 5. 実ファイルパスの組み立てと存在確認（ディレクトリトラバーサル対策）
+    # progress.url からファイル名部分（uuid.ext）のみを安全に抽出
+    filename = os.path.basename(progress.url)
+    filepath = os.path.join(UPLOAD_DIR, filename)
+
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail="ファイルがサーバー上に見つかりません")
+
+    # 6. 元のファイル名がDB等に保存されていない場合の対策
+    # 本来はアップロード時の元のファイル名（例: 報告書.pdf）をDBに保存しておくのが理想です。
+    # 保持していない場合は、仮のファイル名を生成してブラウザにダウンロードさせます。
+    download_name = f"download_{progress_id}{os.path.splitext(filename)[1]}"
+    
+    # 日本語のファイル名でも文字化けしないようにURLエンコード処理
+    # 例: "報告書.pdf" -> "utf-8''%E5%A0%B1%E5%91%8A%E6%9B%B8.pdf"
+    encoded_filename = urllib.parse.quote(download_name)
+    headers = {
+        "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
+    }
+
+    # 7. FastAPIのFileResponseを使い、ストリーミングで安全に返却
+    return FileResponse(
+        path=filepath,
+        media_type=progress.file_type or "application/octet-stream",
+        headers=headers
+    )
