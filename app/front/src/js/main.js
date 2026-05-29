@@ -669,11 +669,13 @@ function renderGroupDetail(group, progresses) {
                    </div>` : '');
 
             const actions = canEdit ? `
-                <div style="display:flex; gap:8px; margin-top:8px; align-items:center;">
-                    <button onclick="openEditProgressModal(${p.id}, ${p.start_page}, ${p.end_page}, '${escapeHtml(p.memo || '')}')"
-                        style="font-size:0.75rem; padding:3px 8px; border:1px solid #ccc; background:#fff; border-radius:4px; cursor:pointer;">✏️ 編集</button>
-                    <button onclick="handleDeleteProgress(${group.id}, ${p.id})"
-                        style="font-size:0.75rem; padding:3px 8px; border:1px solid #e74c3c; color:#e74c3c; background:#fff; border-radius:4px; cursor:pointer;">🗑️ 削除</button>
+                <div style="display:flex; flex-direction:column; gap:8px; margin-top:8px;">
+                    <div style="display:flex; flex-direction:column; gap:6px;">
+                        <button onclick="openEditProgressModal(${p.id}, ${p.start_page}, ${p.end_page}, '${escapeHtml(p.memo || '')}')"
+                            style="font-size:0.75rem; padding:3px 8px; border:1px solid #ccc; background:#fff; border-radius:4px; cursor:pointer; align-self:flex-start;">✏️ 編集</button>
+                        <button onclick="handleDeleteProgress(${group.id}, ${p.id})"
+                            style="font-size:0.75rem; padding:3px 8px; border:1px solid #e74c3c; color:#e74c3c; background:#fff; border-radius:4px; cursor:pointer; align-self:flex-start;">🗑️ 削除</button>
+                    </div>
                     ${fileArea}
                 </div>` : `<div style="margin-top:8px;">${fileArea}</div>`;
 
