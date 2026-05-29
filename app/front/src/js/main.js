@@ -54,8 +54,9 @@ function escapeHtml(str) {
 }
 
 function calculateTotalRead(progresses) {
-    if (!progresses.length) return 0;
-    const intervals = progresses
+    const valid = progresses.filter(p => p.start_page > 0 && p.end_page >= p.start_page);
+    if (!valid.length) return 0;
+    const intervals = valid
         .map(p => [p.start_page, p.end_page])
         .sort((a, b) => a[0] - b[0]);
     const merged = [];
@@ -72,6 +73,48 @@ function calculateTotalRead(progresses) {
 // ========================================
 // index.html: 参加中グループ一覧
 // ========================================
+let allMyGroupsIndex = [];
+
+function getGroupStatus(group) {
+    const totalPages = group.total_pages || 0;
+    const myProgresses = (group.progresses || []).filter(p => p.user_id === currentUser.id);
+    const totalRead = calculateTotalRead(myProgresses);
+    const percent = totalPages > 0 ? Math.min(100, Math.round((totalRead / totalPages) * 100)) : 0;
+    if (percent === 100) return 'done';
+    if (percent > 0) return 'reading';
+    return 'unread';
+}
+
+function renderIndexGroups(groups) {
+    const container = document.getElementById('group-list');
+    if (groups.length === 0) {
+        container.innerHTML = `<p style="color:#999; text-align:center; grid-column:1/-1;">該当するグループが見つかりませんでした</p>`;
+        return;
+    }
+    const displayGroups = groups.slice(0, 20);
+    container.innerHTML = displayGroups.map(renderGroupCard).join('');
+    if (groups.length > 20) {
+        container.innerHTML += `
+            <div style="grid-column:1/-1; text-align:right; padding-top:10px;">
+                <a href="/public/bookshelf.html" style="font-weight:bold;">もっと見る →</a>
+            </div>`;
+    }
+}
+
+function filterIndexGroups(status) {
+    //選択中のステータスをここで保存
+    sessionStorage.setItem('indexFilter', status);
+    document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+    event.currentTarget.classList.add('active');
+
+    if (status === 'all') {
+        renderIndexGroups(allMyGroupsIndex);
+        return;
+    }
+    const filtered = allMyGroupsIndex.filter(g => getGroupStatus(g) === status);
+    renderIndexGroups(filtered);
+}
+
 async function loadMyGroups() {
     const container = document.getElementById('group-list');
     try {
@@ -104,6 +147,12 @@ async function loadMyGroups() {
             const latestB = b.progresses.length > 0 ? b.progresses[0].id : -1;
             return latestB - latestA;
         });
+
+        allMyGroupsIndex = groupsWithProgress;
+        // 保存したページの情報を読み込む
+        const savedFilter = sessionStorage.getItem('indexFilter') || 'all';
+        // フィルタを適用して描画
+        savedFilter === 'all' ? renderIndexGroups(allMyGroupsIndex) : renderIndexGroups(allMyGroupsIndex.filter(g => getGroupStatus(g) === savedFilter));
 
         const displayGroups = groupsWithProgress.slice(0, 20);
         container.innerHTML = displayGroups.map(renderGroupCard).join('');
@@ -220,11 +269,15 @@ async function runBookSearch() {
     const q = document.getElementById('search-input').value.trim();
     if (!q) { alert("検索キーワードを入力してください"); return; }
 
+    
+    const type = document.getElementById('search-type').value;
     const container = document.getElementById('search-results');
     container.innerHTML = `<p style="text-align:center; color:#999; padding:30px;">検索中...</p>`;
 
     try {
-        const results = await searchGoogleBooks(q);
+        const results = type === 'title'
+            ? await searchGoogleBooksByTitle(q)
+            : await searchGoogleBooksByAuthor(q);
 
         if (!results || results.length === 0) {
             container.innerHTML = `<p style="text-align:center; color:#999; padding:30px;">該当する本が見つかりませんでした</p>`;
@@ -266,20 +319,33 @@ function renderBookResult(book) {
 }
 
 function openCreateModal(book) {
-    selectedBook = book;
-    document.getElementById('modal-book-title').innerText  = book.title || '(タイトル不明)';
-    document.getElementById('modal-book-author').innerText = book.author || '';
-    const coverEl = document.getElementById('modal-book-cover');
-    coverEl.src = book.small_cover_url || '';
-    coverEl.style.display = book.small_cover_url ? 'block' : 'none';
-
-    document.getElementById('modal-total-pages').value = '';
+    if (!book) {
+        document.getElementById('modal-book-title').innerText  = '';
+        document.getElementById('modal-book-author').innerText = '';
+        const coverEl = document.getElementById('modal-book-cover');
+        coverEl.src = '';
+        coverEl.style.display = 'none';
+        document.getElementById('modal-book-info').style.display = 'none';
+        document.getElementById('modal-book-info-inputs').style.display = 'block';
+    document.getElementById('modal-group-name').value  = '';
+    }else {
+        selectedBook = book;
+        document.getElementById('modal-book-title').innerText  = book.title || '(タイトル不明)';
+        document.getElementById('modal-book-author').innerText = book.author || '';
+        const coverEl = document.getElementById('modal-book-cover');
+        coverEl.src = book.small_cover_url || '';
+        coverEl.style.display = book.small_cover_url ? 'block' : 'none';
+        document.getElementById('modal-book-info').style.display = 'flex';
+        document.getElementById('modal-book-info-inputs').style.display = 'none';
     document.getElementById('modal-group-name').value  = book.title ? `${book.title}読書会` : '';
+    }
+    document.getElementById('modal-total-pages').value = '';
     document.getElementById('modal-is-lock').checked   = false;
     document.getElementById('modal-password').value    = '';
     document.getElementById('password-field').style.display = 'none';
     document.getElementById('create-modal').style.display   = 'flex';
 }
+
 
 function closeCreateModal() {
     document.getElementById('create-modal').style.display = 'none';
@@ -291,8 +357,14 @@ function togglePasswordField() {
     document.getElementById('password-field').style.display = isLock ? 'block' : 'none';
 }
 
+
+
 async function submitCreateGroup() {
-    if (!selectedBook || !currentUser) return;
+    if (!currentUser) return;
+    const title = selectedBook?.title || document.getElementById('modal-title-input').value.trim();
+    const author = selectedBook?.author || document.getElementById('modal-author-input').value.trim();
+
+    if (!title) { alert("タイトルを入力してください"); return; }
 
     const totalPages = parseInt(document.getElementById('modal-total-pages').value);
     const groupName  = document.getElementById('modal-group-name').value.trim();
@@ -308,17 +380,17 @@ async function submitCreateGroup() {
         owner:         currentUser.id,
         is_lock:       isLock,
         password:      password || "none",
-        title:         selectedBook.title         || null,
+        title:         title || null,
         total_pages:   totalPages,
-        author:        selectedBook.author        || null,
-        publisher:     selectedBook.publisher     || null,
-        published_date:selectedBook.published_date|| null,
-        description:   selectedBook.description   || null,
-        self_link:     selectedBook.self_link      || null,
-        api_id:        selectedBook.api_id         || null,
-        api_etag:      selectedBook.api_etag       || null,
-        small_cover_url:selectedBook.small_cover_url|| null,
-        cover_url:     selectedBook.cover_url      || null,
+        author:        author || null,
+        publisher: selectedBook?.publisher ?? null,
+        published_date:selectedBook?.published_date  ?? null,
+        description:   selectedBook?.description   ?? null,
+        self_link:     selectedBook?.self_link     ?? null,
+        api_id:        selectedBook?.api_id        ?? null,
+        api_etag:      selectedBook?.api_etag      ?? null,
+        small_cover_url:selectedBook?.small_cover_url ?? null,
+        cover_url:     selectedBook?.cover_url     ?? null,
     };
 
     try {
@@ -330,6 +402,7 @@ async function submitCreateGroup() {
         alert("エラー: " + e.message);
     }
 }
+
 
 // ========================================
 // bookshelf.html: 自分の本棚
@@ -931,4 +1004,8 @@ function initMemoToggleButtons() {
             btn.style.display = 'none';
         }
     });
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> upstream/main

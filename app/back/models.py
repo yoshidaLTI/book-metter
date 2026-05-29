@@ -69,3 +69,21 @@ class Progress(Base):
 
     user = relationship("User", back_populates="progresses")
     group = relationship("Group", back_populates="progresses")
+
+
+class Recommend(Base):
+    __tablename__ = "recommends"
+
+    id = Column(Integer, primary_key=True, index=True)
+    api_id = Column(String, unique=True, index=True)
+    api_etag = Column(String, nullable=True)
+    self_link = Column(String, nullable=True)
+    title = Column(String, nullable=False)
+    author = Column(String, nullable=True)
+    publisher = Column(String, nullable=True)
+    published_date = Column(String, nullable=True)
+    description = Column(Text, nullable=True)
+    total_pages = Column(Integer, nullable=True)
+    small_cover_url = Column(String, nullable=True)
+    cover_url = Column(String, nullable=True)
+    is_active = Column(Boolean, default=True)
