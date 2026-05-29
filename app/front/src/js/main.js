@@ -1004,8 +1004,4 @@ function initMemoToggleButtons() {
             btn.style.display = 'none';
         }
     });
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> upstream/main
