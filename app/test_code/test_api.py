@@ -1,10 +1,12 @@
 import pytest
+from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool  
 from app.back.database import Base, get_db
 from app.back.main import app
+from app.back.crud import format_activity_time
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
 
@@ -277,6 +279,127 @@ class TestProgress:
         progresses = res.json()
         # idが大きい方（後に作成）が先頭
         assert progresses[0]["id"] > progresses[1]["id"]
+
+class TestProgressActivity:
+    def test_activities_only_joined_groups_and_exclude_initial_progress(self, client):
+        """参加中グループの通常進捗だけをアクティビティとして返す"""
+        # user1が参加しているグループを作成し、表示対象になる通常進捗を追加する。
+        # グループ作成時の初期進捗も自動作成されるが、それは後続の検証で除外される想定。
+        signup_and_login(client, "user1", "pass1")
+        joined_group_id = create_test_group(client, "joined group").json()["id"]
+        client.post(f"/api/groups/{joined_group_id}/progress", json={
+            "start_page": 1,
+            "end_page": 10,
+        })
+
+        # user1が参加していない別グループにも進捗を追加する。
+        # この進捗がuser1のアクティビティに混ざらないことを確認する。
+        signup_and_login(client, "user2", "pass2")
+        other_group_id = create_test_group(client, "other group").json()["id"]
+        client.post(f"/api/groups/{other_group_id}/progress", json={
+            "start_page": 11,
+            "end_page": 20,
+        })
+
+        # user1としてアクティビティを取得し、参加中グループの通常進捗だけが返ることを確認する。
+        signup_and_login(client, "user1", "pass1")
+        res = client.get("/api/groups/activities")
+
+        assert res.status_code == 200
+        activities = res.json()
+        # 返るのはjoined groupに追加した1件だけ。
+        # 初期進捗と未参加グループの進捗はどちらも含まれない。
+        assert len(activities) == 1
+        assert activities[0]["group_name"] == "joined group"
+        # ホームの表示に不要なIDやページ情報を返していないことを確認する。
+        assert set(activities[0].keys()) == {
+            "group_name",
+            "display_username",
+            "display_time",
+        }
+
+    def test_activity_uses_you_for_current_user(self, client):
+        """自分の進捗は表示用ユーザー名を「あなた」にする"""
+        # user1が自分の参加グループに進捗を追加する。
+        signup_and_login(client, "user1", "pass1")
+        group_id = create_test_group(client, "my group").json()["id"]
+        client.post(f"/api/groups/{group_id}/progress", json={
+            "start_page": 1,
+            "end_page": 10,
+        })
+
+        # 自分自身の進捗なので、画面表示用の名前は実ユーザー名ではなく「あなた」になる。
+        res = client.get("/api/groups/activities")
+
+        assert res.status_code == 200
+        activity = res.json()[0]
+        assert activity["display_username"] == "あなた"
+        # 作成直後の進捗は、実行タイミングによって秒または分単位の表示になる。
+        assert activity["display_time"].endswith(("秒前", "分前"))
+
+    def test_activity_uses_username_for_other_member(self, client):
+        """他メンバーの進捗は表示用ユーザー名に実ユーザー名を入れる"""
+        # ownerがグループを作成する。
+        signup_and_login(client, "owner", "pass")
+        group_id = create_test_group(client, "member group").json()["id"]
+
+        # memberが同じグループに参加し、進捗を追加する。
+        signup_and_login(client, "member", "pass")
+        client.post(f"/api/groups/{group_id}/join")
+        client.post(f"/api/groups/{group_id}/progress", json={
+            "start_page": 2,
+            "end_page": 12,
+        })
+
+        # ownerから見ると他メンバーの進捗なので、表示名は「あなた」ではなくmemberになる。
+        signup_and_login(client, "owner", "pass")
+        res = client.get("/api/groups/activities")
+
+        assert res.status_code == 200
+        activity = res.json()[0]
+        assert activity["display_username"] == "member"
+
+    def test_activities_order_and_fixed_limit(self, client):
+        """アクティビティは新しい順で、最大10件だけ返す"""
+        # 最初にold groupへ進捗を追加し、古いアクティビティを作る。
+        signup_and_login(client, "user1", "pass1")
+        old_group_id = create_test_group(client, "old group").json()["id"]
+        client.post(f"/api/groups/{old_group_id}/progress", json={
+            "start_page": 1,
+            "end_page": 1,
+        })
+        # 後から10件の進捗を追加し、old groupが固定表示件数の外へ押し出される状況を作る。
+        for index in range(10):
+            group_id = create_test_group(client, f"new group {index}").json()["id"]
+            client.post(f"/api/groups/{group_id}/progress", json={
+                "start_page": index + 2,
+                "end_page": index + 2,
+            })
+
+        # URLでは件数を指定せず、バックエンド側の固定値である10件だけ取得する。
+        res = client.get("/api/groups/activities")
+
+        assert res.status_code == 200
+        activities = res.json()
+        assert len(activities) == 10
+        # 最新順で返るため、最後に進捗を追加したグループが先頭になる。
+        assert activities[0]["group_name"] == "new group 9"
+        # 10件固定なので、古いold groupのアクティビティは返らない。
+        assert all(activity["group_name"] != "old group" for activity in activities)
+        assert activities[0]["display_time"].endswith(("秒前", "分前"))
+
+    def test_format_activity_time(self):
+        """経過時間に応じて、アクティビティ欄の表示形式を切り替える"""
+        # 現在時刻に依存するとテスト結果が不安定になるため、基準時刻を固定する。
+        now = datetime(2026, 5, 29, 12, 0, tzinfo=timezone.utc)
+
+        # 経過時間の長さに応じて、秒・分・時間・日・日付表記へ切り替わることを確認する。
+        assert format_activity_time(None, now) == "日時不明"
+        assert format_activity_time(now - timedelta(seconds=30), now) == "30秒前"
+        assert format_activity_time(now - timedelta(minutes=5), now) == "5分前"
+        assert format_activity_time(now - timedelta(hours=3), now) == "3時間前"
+        assert format_activity_time(now - timedelta(days=2), now) == "2日前"
+        assert format_activity_time(now - timedelta(days=7), now) == "05/22"
 
 class TestProgressFile:
     def test_upload_file(self, client):
