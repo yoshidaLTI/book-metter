@@ -656,10 +656,17 @@ function renderGroupDetail(group, progresses) {
 
             const fileArea = p.url
                 ? `<a href="${p.url}" target="_blank" download style="font-size:0.8rem; color:var(--primary-color);">📎 添付ファイルをダウンロード</a>`
-                : (canEdit ? `<label style="font-size:0.8rem; color:#999; cursor:pointer;">
-                    📎 ファイルを添付
-                    <input type="file" style="display:none;" onchange="handleFileUpload(event, ${group.id}, ${p.id})">
-                   </label>` : '');
+                : (canEdit ? `<div class="drop-zone" id="drop-zone-${p.id}"
+                       data-group-id="${group.id}"
+                       data-progress-id="${p.id}"
+                       ondragover="handleDragOver(event)"
+                       ondragleave="handleDragLeave(event)"
+                       ondrop="handleDrop(event)">
+                    <label style="font-size:0.8rem; color:#999; cursor:pointer;">
+                        📎 クリックまたはファイルをドロップして添付
+                        <input type="file" style="display:none;" onchange="handleFileUpload(event, ${group.id}, ${p.id})">
+                    </label>
+                   </div>` : '');
 
             const actions = canEdit ? `
                 <div style="display:flex; gap:8px; margin-top:8px; align-items:center;">
@@ -823,6 +830,34 @@ async function handleDeleteProgress(groupId, progressId) {
 async function handleFileUpload(event, groupId, progressId) {
     const file = event.target.files[0];
     if (!file) return;
+    try {
+        await uploadProgressFile(groupId, progressId, file);
+        alert("ファイルをアップロードしました！");
+        await loadGroupDetail();
+    } catch (e) {
+        alert("エラー: " + e.message);
+    }
+}
+
+function handleDragOver(event) {
+    event.preventDefault();
+    event.currentTarget.classList.add('drag-over');
+}
+
+function handleDragLeave(event) {
+    event.currentTarget.classList.remove('drag-over');
+}
+
+async function handleDrop(event) {
+    event.preventDefault();
+    event.currentTarget.classList.remove('drag-over');
+
+    const file = event.dataTransfer.files[0];
+    if (!file) return;
+
+    const groupId    = event.currentTarget.dataset.groupId;
+    const progressId = event.currentTarget.dataset.progressId;
+
     try {
         await uploadProgressFile(groupId, progressId, file);
         alert("ファイルをアップロードしました！");

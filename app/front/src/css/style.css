@@ -242,6 +242,18 @@ main { max-width: 1000px; margin: 0 auto 40px; padding: 0 20px; }
     border-radius: 4px;
 }
 
+/* ドロップゾーン */
+.drop-zone {
+    border: 2px dashed #ccc;
+    border-radius: 6px;
+    padding: 6px 10px;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+.drop-zone.drag-over {
+    background-color: #eef4ff;
+    border-color: #4a90e2;
+}
+
 /* 進捗履歴リスト */
 .history-list {
     display: flex;
