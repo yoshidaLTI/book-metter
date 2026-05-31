@@ -209,7 +209,7 @@ def format_activity_time(created_at: datetime, now: datetime) -> str:
     if created_at.tzinfo is None:
         created_at = created_at.replace(tzinfo=timezone.utc)
     #　プログレス作成時刻と現在時刻から何秒前にProgressが作成されたかを求める
-    #　他の時間に関しても何秒前という情報から求める
+    #　他の時間に関しても何秒前という情報から // 60　して求める
     elapsed_seconds = max(0, int((now - created_at).total_seconds()))
     elapsed_minutes = elapsed_seconds // 60
     elapsed_hours = elapsed_minutes // 60
