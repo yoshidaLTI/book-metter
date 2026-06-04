@@ -205,11 +205,11 @@ def format_activity_time(created_at: datetime, now: datetime) -> str:
     if created_at is None:
         return "日時不明"
 
-    # タイムゾーンが設定されてない場合
+    # タイムゾーンが設定されていない場合は、比較用にUTCとして扱う。
     if created_at.tzinfo is None:
         created_at = created_at.replace(tzinfo=timezone.utc)
-    #　プログレス作成時刻と現在時刻から何秒前にProgressが作成されたかを求める
-    #　他の時間に関しても何秒前という情報から // 60　して求める
+
+    # Progressの作成時刻と現在時刻の差から、表示用の経過時間を作る。
     elapsed_seconds = max(0, int((now - created_at).total_seconds()))
     elapsed_minutes = elapsed_seconds // 60
     elapsed_hours = elapsed_minutes // 60
@@ -229,7 +229,7 @@ def get_user_progress_activities(db: Session, user_id: int):
     """
     ホーム画面のアクティビティ欄に出す最新進捗を組み立てる。
 
-    例: 「田中 が 5分前に Java愛好会 へ進捗を追加しました」
+    例: 「田中 が 5分前に A班 へ進捗を追加しました」
     のように表示できるよう、DBから参加中グループの進捗を取り出し、
     フロントがそのまま使える表示用データへ整える。
     """
@@ -241,13 +241,11 @@ def get_user_progress_activities(db: Session, user_id: int):
             models.Membership,
             models.Membership.group_id == models.Progress.group_id
         )
-
+        # Membership.user_idで所属グループを絞るため、同じグループ内の他メンバーの進捗も残る。
         .filter(models.Membership.user_id == user_id)
-        # グループ作成時に自動で作る start_page=0 の初期進捗は、
-        # 「進捗を追加した」という活動ではないため、アクティビティ欄から除外する。
+        # グループ作成時の初期進捗は、実際の進捗追加ではないため除外する。
         .filter(models.Progress.start_page > 0)
         .filter(models.Progress.end_page >= models.Progress.start_page)
-        # idは後から作られた進捗ほど大きくなるため、id降順で最新順に並べる。
         .order_by(models.Progress.id.desc())
         # ホーム画面には最新10件だけを表示する。
         .limit(10)
@@ -257,7 +255,6 @@ def get_user_progress_activities(db: Session, user_id: int):
     now = datetime.now(timezone.utc)
     activities = []
     for progress, user, group in rows:
-        # アクティビティ欄の表示に必要な情報を返す。
         activities.append({
             "group_name": group.name,
             "display_username": "あなた" if user.id == user_id else user.username,

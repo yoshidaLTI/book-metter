@@ -45,6 +45,7 @@ class ProgressActivity(BaseModel):
     display_username: str
     display_time: str
 
+
 class GroupBase(BaseModel):
     name: str
     owner: int
