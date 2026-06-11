@@ -69,6 +69,15 @@ def get_my_groups(
     """ログイン中のユーザーが所属しているグループ一覧を取得する。"""
     return crud.get_user_groups(db, current_user_id)
 
+# アクティビティ機能のAPI入口。
+# フロントはこのURLを呼び出して、ホーム画面に「誰が・いつ・どのグループへ進捗を追加したか」を表示する。
+@router.get("/activities", response_model=list[schemas.ProgressActivity])
+def get_my_progress_activities(
+    db: Session = Depends(database.get_db),
+    current_user_id: int = Depends(dependencies.get_current_user_id)
+):
+    return crud.get_user_progress_activities(db, current_user_id)
+
 @router.get("/search/by-name", response_model=list[schemas.Group])
 def search_by_name(
     q: str = Query(..., description="グループ名の検索キーワード"),

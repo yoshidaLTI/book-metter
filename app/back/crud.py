@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from . import models, schemas
 from typing import Optional
 from .auth_utils import verify_password
+from datetime import datetime, timezone
 
 # =================================================================
 # 1. ユーザー操作
@@ -198,6 +199,69 @@ def get_group_progresses(db: Session, group_id: int, limit: int = None):
     if limit:
         query = query.limit(limit)
     return query.all()
+
+def format_activity_time(created_at: datetime, now: datetime) -> str:
+    """アクティビティ欄に表示する経過時間の文字列を作成する。"""
+    if created_at is None:
+        return "日時不明"
+
+    # タイムゾーンが設定されていない場合は、比較用にUTCとして扱う。
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=timezone.utc)
+
+    # Progressの作成時刻と現在時刻の差から、表示用の経過時間を作る。
+    elapsed_seconds = max(0, int((now - created_at).total_seconds()))
+    elapsed_minutes = elapsed_seconds // 60
+    elapsed_hours = elapsed_minutes // 60
+    elapsed_days = elapsed_hours // 24
+
+    if elapsed_seconds < 60:
+        return f"{elapsed_seconds}秒前"
+    if elapsed_minutes < 60:
+        return f"{elapsed_minutes}分前"
+    if elapsed_hours < 24:
+        return f"{elapsed_hours}時間前"
+    if elapsed_days < 7:
+        return f"{elapsed_days}日前"
+    return created_at.strftime("%m/%d")
+
+def get_user_progress_activities(db: Session, user_id: int):
+    """
+    ホーム画面のアクティビティ欄に出す最新進捗を組み立てる。
+
+    例: 「田中 が 5分前に A班 へ進捗を追加しました」
+    のように表示できるよう、DBから参加中グループの進捗を取り出し、
+    フロントがそのまま使える表示用データへ整える。
+    """
+    rows = (
+        db.query(models.Progress, models.User, models.Group)
+        .join(models.User, models.Progress.user_id == models.User.id)
+        .join(models.Group, models.Progress.group_id == models.Group.id)
+        .join(
+            models.Membership,
+            models.Membership.group_id == models.Progress.group_id
+        )
+        # Membership.user_idで所属グループを絞るため、同じグループ内の他メンバーの進捗も残る。
+        .filter(models.Membership.user_id == user_id)
+        # グループ作成時の初期進捗は、実際の進捗追加ではないため除外する。
+        .filter(models.Progress.start_page > 0)
+        .filter(models.Progress.end_page >= models.Progress.start_page)
+        .order_by(models.Progress.id.desc())
+        # ホーム画面には最新10件だけを表示する。
+        .limit(10)
+        .all()
+    )
+
+    now = datetime.now(timezone.utc)
+    activities = []
+    for progress, user, group in rows:
+        activities.append({
+            "group_name": group.name,
+            "display_username": "あなた" if user.id == user_id else user.username,
+            "display_time": format_activity_time(progress.created_at, now),
+        })
+
+    return activities
 
 def update_progress(db: Session, progress_id: int, update_data: schemas.ProgressUpdate):
     progress = db.query(models.Progress).filter(models.Progress.id == progress_id).first()

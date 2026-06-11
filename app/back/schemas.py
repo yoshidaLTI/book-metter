@@ -40,6 +40,11 @@ class ProgressUpdate(BaseModel):
     end_page: Optional[int] = None
     memo: Optional[str] = None
 
+class ProgressActivity(BaseModel):
+    group_name: str
+    display_username: str
+    display_time: str
+
 
 class GroupBase(BaseModel):
     name: str
